@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { dataService } from '../../services/dataService';
+import { dataService } from '../../services/supabaseClient'
 
 export default function Asistencias() {
   const [asistencias, setAsistencias] = useState([]);

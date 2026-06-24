@@ -1,6 +1,8 @@
 import { HashRouter, Routes, Route, Link } from 'react-router-dom';
-import ProtectedRoute from './components/ProtectedRoute'; // Importamos el protector
-import logotrayecto from './assets/logo-trayecto.png'
+import ProtectedRoute from './components/ProtectedRoute';
+
+// CORRECCIÓN: Falta una barra "/" después del punto
+import logotrayecto from './logo-trayecto.png'; 
 
 // Importaciones de la App Móvil
 import OperadorLayout from './pages/Operador/OperadorLayout';
@@ -23,11 +25,13 @@ import Encuestas from './pages/Admin/Encuestas';
 
 const Portal = () => (
   <div style={{ textAlign: 'center', marginTop: '50px' }}>
-    <h1 style={{ color: 'var(--primary)', margin: 0, fontSize: '36px', letterSpacing: '1px', textShadow: '0 0 20px rgba(217,119,6,0.4)' }}>UDAT</h1>
+    {/* Aquí puedes usar el logo corregido */}
+    <img src={logotrayecto} alt="Logo" style={{ width: '150px', marginBottom: '20px' }} />
+    <h1 style={{ color: 'var(--primary)', margin: 0, fontSize: '36px', letterSpacing: '1px' }}>UDAT</h1>
     <p style={{ color: '#94a3b8', marginBottom: '30px', fontSize: '15px' }}>Bienvenido al Centro Corporativo.</p>
     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', alignItems: 'center' }}>
-      <Link to="/app" style={{ padding: '18px', background: 'var(--primary)', color: 'white', textDecoration: 'none', borderRadius: '12px', fontWeight: 'bold', width: '90%', maxWidth: '300px', boxShadow: '0 4px 15px rgba(217, 119, 6, 0.4)' }}>🚚 App Operadores</Link>
-      <Link to="/admin-login" style={{ padding: '18px', background: '#2563eb', color: 'white', textDecoration: 'none', borderRadius: '12px', fontWeight: 'bold', width: '90%', maxWidth: '300px', boxShadow: '0 4px 15px rgba(37, 99, 235, 0.4)' }}>📊 Centro de Mando (Admin)</Link>
+      <Link to="/app" style={{ padding: '18px', background: 'var(--primary)', color: 'white', textDecoration: 'none', borderRadius: '12px', fontWeight: 'bold', width: '90%', maxWidth: '300px' }}>🚚 App Operadores</Link>
+      <Link to="/admin-login" style={{ padding: '18px', background: '#2563eb', color: 'white', textDecoration: 'none', borderRadius: '12px', fontWeight: 'bold', width: '90%', maxWidth: '300px' }}>📊 Centro de Mando (Admin)</Link>
     </div>
   </div>
 );
@@ -41,25 +45,16 @@ function App() {
         {/* RUTAS DE LA APP MÓVIL */}
         <Route path="/app" element={<OperadorLayout />}>
           <Route index element={<LoginApp />} />
-          {/* Rutas protegidas para Alumnos */}
           <Route path="alumno" element={
-            <ProtectedRoute role="app">
-              <DashboardAlumno />
-            </ProtectedRoute>
+            <ProtectedRoute role="app"><DashboardAlumno /></ProtectedRoute>
           } />
-          {/* Rutas protegidas para Tutores */}
           <Route path="tutor" element={
-            <ProtectedRoute role="app">
-              <DashboardTutor />
-            </ProtectedRoute>
+            <ProtectedRoute role="app"><DashboardTutor /></ProtectedRoute>
           } />
         </Route>
 
         {/* RUTAS DEL PANEL ADMINISTRATIVO */}
-        {/* Separamos el Login en su propia ruta independiente */}
         <Route path="/admin-login" element={<LoginAdmin />} />
-        
-        {/* Esta es la Gran Carpeta "/admin" protegida */}
         <Route path="/admin" element={
           <ProtectedRoute role="admin">
             <AdminLayout />
