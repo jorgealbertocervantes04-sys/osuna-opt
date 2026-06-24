@@ -1,4 +1,4 @@
-
+import { HashRouter, Routes, Route, Link } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute'; // Importamos el protector
 
 // Importaciones de la App Móvil
