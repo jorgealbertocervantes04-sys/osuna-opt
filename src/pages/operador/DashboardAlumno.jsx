@@ -13,20 +13,28 @@ export default function DashboardAlumno() {
   const [listaOPTs, setListaOPTs] = useState([]);
   const [materiales, setMateriales] = useState([]);
   
+  // Catálogos Dinámicos
+  const [catUnidades, setCatUnidades] = useState([]);
+  const [catLideres, setCatLideres] = useState([]);
+  const [catGerentes, setCatGerentes] = useState([]);
+
+  // CANDADO: Modal de Actualización Obligatoria
+  const [mostrarModalActualizacion, setMostrarModalActualizacion] = useState(false);
+  const [formActualizacion, setFormActualizacion] = useState({ unidad_negocio: '', lider: '', gerente: '' });
+
   // Estados para Asistencia
   const [manejaHoy, setManejaHoy] = useState('SI');
   const [actividadSinManejo, setActividadSinManejo] = useState('Apoyo en Patio');
   const [asistenciaEnviada, setAsistenciaEnviada] = useState(false);
 
   // Estados para Viajes (Bitácora)
-  const [estadoViaje, setEstadoViaje] = useState('reposo'); // reposo | inicio | progreso | cierre
+  const [estadoViaje, setEstadoViaje] = useState('reposo'); 
   const [idViajeActivo, setIdViajeActivo] = useState(null);
-  
-  // Formularios de Viajes
   const [optSeleccionado, setOptSeleccionado] = useState('');
-  const [optManual, setOptManual] = useState('');
   const [kmInicial, setKmInicial] = useState('');
   const [kmFinal, setKmFinal] = useState('');
+  
+  // Estados para Evaluación de OPT (AHORA OBLIGATORIOS)
   const [evalTrato, setEvalTrato] = useState('');
   const [evalInstruccion, setEvalInstruccion] = useState('');
   const [comentarioOpt, setComentarioOpt] = useState('');
@@ -44,32 +52,39 @@ export default function DashboardAlumno() {
     { sem: 7, km: 2400, hrs: 34 }, { sem: 8, km: 2400, hrs: 35 }
   ];
 
-  // 1. CARGAR SESIÓN Y DATOS AL INICIAR
   useEffect(() => {
     const cargarTodo = async () => {
       const session = localStorage.getItem('udat_app_session');
-      if (!session) {
-        navigate('/app');
-        return;
-      }
+      if (!session) return navigate('/app');
       
       const user = JSON.parse(session);
       setUsuarioActual(user);
 
-      // Traer todos los datos en paralelo
-      const [todosViajes, todosUsuarios, todosMateriales] = await Promise.all([
+      // Traer todos los datos en paralelo incluyendo los nuevos catálogos
+      const [todosViajes, todosUsuarios, todosMateriales, catalogos] = await Promise.all([
         dataService.obtenerViajes(),
         dataService.obtenerUsuarios(),
-        dataService.obtenerMaterialEstudio()
+        dataService.obtenerMaterialEstudio(),
+        dataService.obtenerCatalogos() // Nueva función
       ]);
 
-      // Filtrar solo los viajes de este alumno
       const misViajes = todosViajes.filter(v => v.id_alumno === user.id);
       setViajes(misViajes);
       
-      // Filtrar a los tutores para el menú desplegable
       setListaOPTs(todosUsuarios.filter(u => u.rol === 'Tutor'));
       setMateriales(todosMateriales);
+      
+      setCatUnidades(catalogos.unidades);
+      setCatLideres(catalogos.lideres);
+      setCatGerentes(catalogos.gerentes);
+
+      // VERIFICACIÓN DE CANDADO 1 y 2 (Perfil Incompleto o > 7 días)
+      const fechaUltima = user.fecha_actualizacion_perfil ? new Date(user.fecha_actualizacion_perfil) : new Date(0);
+      const diasTranscurridos = (new Date() - fechaUltima) / (1000 * 60 * 60 * 24);
+
+      if (!user.unidad_negocio || !user.lider || !user.gerente || diasTranscurridos >= 7) {
+        setMostrarModalActualizacion(true);
+      }
 
       // Revisar si el alumno dejó un viaje abierto
       const viajeAbierto = misViajes.find(v => v.hora_fin === null);
@@ -84,7 +99,26 @@ export default function DashboardAlumno() {
     cargarTodo();
   }, [navigate]);
 
-  // 2. FUNCIONES DE ASISTENCIA
+  // PROCESAR ACTUALIZACIÓN OBLIGATORIA
+  const guardarActualizacionPerfil = async () => {
+    if (!formActualizacion.unidad_negocio || !formActualizacion.lider || !formActualizacion.gerente) {
+      return alert("Debes seleccionar todas las opciones para continuar.");
+    }
+
+    const { exito } = await dataService.actualizarPerfilAlumno(usuarioActual.id, formActualizacion);
+    
+    if (exito) {
+      // Actualizamos la sesión local para que no vuelva a pedirlo
+      const userActualizado = { ...usuarioActual, ...formActualizacion, fecha_actualizacion_perfil: new Date().toISOString() };
+      localStorage.setItem('udat_app_session', JSON.stringify(userActualizado));
+      setUsuarioActual(userActualizado);
+      setMostrarModalActualizacion(false);
+      alert("¡Perfil actualizado con éxito! Ya puedes operar.");
+    } else {
+      alert("Error guardando los datos. Intenta de nuevo.");
+    }
+  };
+
   const marcarAsistencia = async () => {
     const payload = {
       id_usuario: usuarioActual.id,
@@ -92,28 +126,23 @@ export default function DashboardAlumno() {
       actividad_sin_manejo: manejaHoy === 'NO' ? actividadSinManejo : null,
       fecha_hora: new Date().toISOString()
     };
-    
     await dataService.registrarAsistencia(payload);
     setAsistenciaEnviada(true);
     alert("✓ Asistencia registrada corporativamente.");
   };
 
-  // 3. FUNCIONES DE VIAJE
   const iniciarRuta = async () => {
-    const tutorFinal = optSeleccionado === 'OTRO' ? optManual : optSeleccionado;
-    
-    if (!tutorFinal || !kmInicial) return alert("Selecciona tutor y kilometraje inicial.");
+    if (!optSeleccionado || !kmInicial) return alert("Selecciona tutor y kilometraje inicial.");
     if (parseFloat(kmInicial) < 0) return alert("Kilómetros inválidos.");
 
     const payload = {
       id_alumno: usuarioActual.id,
-      nombre_opt: tutorFinal,
+      nombre_opt: optSeleccionado,
       km_iniciales: parseFloat(kmInicial),
       hora_inicio: new Date().toISOString()
     };
 
     const { exito, data, error } = await dataService.guardarViaje(payload);
-    
     if (exito && data && data.length > 0) {
       setIdViajeActivo(data[0].id);
       setEstadoViaje('progreso');
@@ -124,6 +153,11 @@ export default function DashboardAlumno() {
 
   const finalizarRuta = async () => {
     if (!kmFinal) return alert("Captura el Odómetro Final.");
+    
+    // CANDADO 3: OBLIGAR A EVALUAR AL TUTOR
+    if (!evalTrato || !evalInstruccion) {
+      return alert("⚠️ CANDADO ACTIVO: Para poder subir tus kilómetros a tu Cardex, debes evaluar a tu tutor.");
+    }
     
     const viajeOriginal = viajes.find(v => v.id === idViajeActivo);
     const kmRecorridos = parseFloat(kmFinal) - (viajeOriginal?.km_iniciales || parseFloat(kmInicial));
@@ -140,8 +174,8 @@ export default function DashboardAlumno() {
       km_recorridos: kmRecorridos,
       tiempo_total_minutos: tiempoMinutos,
       notas_novedad: `Tiempo: ${tiempoMinutos} min. ${comentarioOpt}`,
-      opt_calif_trato: evalTrato ? parseInt(evalTrato) : null,
-      opt_calif_instruccion: evalInstruccion ? parseInt(evalInstruccion) : null
+      opt_calif_trato: parseInt(evalTrato),
+      opt_calif_instruccion: parseInt(evalInstruccion)
     };
 
     const { exito, error } = await dataService.guardarViaje(payload, idViajeActivo);
@@ -152,7 +186,6 @@ export default function DashboardAlumno() {
       setIdViajeActivo(null);
       setKmInicial(''); setKmFinal(''); setEvalTrato(''); setEvalInstruccion(''); setComentarioOpt('');
       
-      // Recargar viajes para actualizar la barra de progreso
       const data = await dataService.obtenerViajes();
       setViajes(data.filter(v => v.id_alumno === usuarioActual.id));
     } else {
@@ -160,12 +193,10 @@ export default function DashboardAlumno() {
     }
   };
 
-  // 4. FUNCIONES DE ENCUESTA
   const enviarEncuesta = async () => {
     if (!encuestaTipo || !encuestaNombre || !encuestaEstrellas || !encuestaComentarios) {
       return alert("Llena todos los campos de la encuesta.");
     }
-
     const payload = {
       id_alumno: usuarioActual.id,
       nombre_alumno: usuarioActual.nombre_completo,
@@ -175,9 +206,7 @@ export default function DashboardAlumno() {
       comentarios: encuestaComentarios,
       fecha_creacion: new Date().toISOString()
     };
-
     const { exito, error } = await dataService.guardarEncuesta(payload);
-    
     if (exito) {
       alert("✓ ¡Gracias! Tu opinión fue enviada a corporativo.");
       setEncuestaTipo(''); setEncuestaNombre(''); setEncuestaEstrellas(''); setEncuestaComentarios('');
@@ -186,25 +215,55 @@ export default function DashboardAlumno() {
     }
   };
 
-  // 5. CÁLCULOS DE RENDIMIENTO (METAS)
   const kmTotalesAcumulados = viajes.reduce((acc, v) => acc + (parseFloat(v.km_recorridos) || 0), 0);
   let kmRestantesCalculo = kmTotalesAcumulados;
 
   if (cargandoDatos) return <div style={{ color: 'white', textAlign: 'center', padding: '50px' }}>Sincronizando con base de datos...</div>;
 
   return (
-    <div className="seccion activa" style={{ animation: 'fadeIn 0.4s ease' }}>
+    <div className="seccion activa" style={{ animation: 'fadeIn 0.4s ease', position: 'relative' }}>
       
+      {/* MODAL GIGANTE DE BLOQUEO DE PERFIL */}
+      {mostrarModalActualizacion && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(15, 23, 42, 0.95)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', boxSizing: 'border-box' }}>
+          <div style={{ background: 'var(--card-bg)', border: '2px solid var(--primary)', borderRadius: '20px', padding: '30px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 40px rgba(0,0,0,0.8)' }}>
+            <h2 style={{ color: 'var(--text-light)', marginTop: 0, fontSize: '22px', textAlign: 'center' }}>Actualización Semanal Obligatoria</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '14px', textAlign: 'center', marginBottom: '25px' }}>
+              Para garantizar tu registro de KM, debes confirmar tu información de ruta actual.
+            </p>
+            
+            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px', fontWeight: 'bold' }}>Tu Unidad de Negocio:</label>
+            <select value={formActualizacion.unidad_negocio} onChange={(e) => setFormActualizacion({...formActualizacion, unidad_negocio: e.target.value})} style={{ width: '100%', padding: '14px', marginBottom: '15px', borderRadius: '12px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-color)', color: 'white' }}>
+              <option value="">Selecciona...</option>
+              {catUnidades.map((u, i) => <option key={i} value={u.nombre}>{u.nombre}</option>)}
+            </select>
+
+            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px', fontWeight: 'bold' }}>Tu Líder Operativo:</label>
+            <select value={formActualizacion.lider} onChange={(e) => setFormActualizacion({...formActualizacion, lider: e.target.value})} style={{ width: '100%', padding: '14px', marginBottom: '15px', borderRadius: '12px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-color)', color: 'white' }}>
+              <option value="">Selecciona...</option>
+              {catLideres.map((l, i) => <option key={i} value={l.nombre}>{l.nombre}</option>)}
+            </select>
+
+            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px', fontWeight: 'bold' }}>Tu Gerente:</label>
+            <select value={formActualizacion.gerente} onChange={(e) => setFormActualizacion({...formActualizacion, gerente: e.target.value})} style={{ width: '100%', padding: '14px', marginBottom: '25px', borderRadius: '12px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-color)', color: 'white' }}>
+              <option value="">Selecciona...</option>
+              {catGerentes.map((g, i) => <option key={i} value={g.nombre}>{g.nombre}</option>)}
+            </select>
+
+            <button onClick={guardarActualizacionPerfil} style={{ width: '100%', padding: '16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer', boxShadow: '0 4px 15px var(--primary-glow)' }}>
+              Confirmar y Continuar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* CABECERA Y BOTÓN DE CLAVE */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '15px' }}>
         <div style={{ textAlign: 'left' }}>
           <p style={{ fontSize: '11px', color: 'var(--primary)', margin: 0, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>Operador en Ruta</p>
           <p style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-light)', margin: '2px 0 0 0' }}>{usuarioActual?.nombre_completo}</p>
         </div>
-        <button 
-          onClick={() => { localStorage.removeItem('udat_app_session'); navigate('/app'); }} 
-          style={{ background: 'transparent', border: '1px solid var(--border-color)', color: '#fda4af', width: 'auto', padding: '8px 12px', fontSize: '12px', margin: 0, fontWeight: 700, borderRadius: '8px', cursor: 'pointer' }}
-        >
+        <button onClick={() => { localStorage.removeItem('udat_app_session'); navigate('/app'); }} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: '#fda4af', width: 'auto', padding: '8px 12px', fontSize: '12px', margin: 0, fontWeight: 700, borderRadius: '8px', cursor: 'pointer' }}>
           Cerrar Sesión
         </button>
       </div>
@@ -262,12 +321,7 @@ export default function DashboardAlumno() {
                 <select value={optSeleccionado} onChange={(e) => setOptSeleccionado(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
                   <option value="">Selecciona tu Tutor...</option>
                   {listaOPTs.map(t => <option key={t.id} value={t.nombre_completo}>{t.nombre_completo}</option>)}
-                  <option value="OTRO">⭐ Otro (Escribir manual)</option>
                 </select>
-                
-                {optSeleccionado === 'OTRO' && (
-                  <input type="text" placeholder="Nombre del OPT" value={optManual} onChange={(e) => setOptManual(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', boxSizing: 'border-box' }} />
-                )}
 
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', marginTop: '10px' }}>Odómetro Inicial (KM):</label>
                 <input type="number" value={kmInicial} onChange={(e) => setKmInicial(e.target.value)} placeholder="Ej. 120500" style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', boxSizing: 'border-box' }} />
@@ -295,17 +349,18 @@ export default function DashboardAlumno() {
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>Odómetro Final (KM):</label>
                 <input type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} placeholder="Debe ser mayor al inicial" style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', boxSizing: 'border-box' }} />
                 
-                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '20px', borderRadius: '12px', margin: '20px 0', border: '1px solid var(--border-color)' }}>
-                  <h4 style={{ marginTop: 0, color: 'var(--primary)', fontSize: '14px', textAlign: 'center', border: 'none' }}>⭐ Evalúa a tu Tutor (Opcional)</h4>
+                {/* EVALUACIÓN DE OPT - AHORA OBLIGATORIA */}
+                <div style={{ background: 'rgba(217, 119, 6, 0.1)', padding: '20px', borderRadius: '12px', margin: '20px 0', border: '1px solid var(--primary)' }}>
+                  <h4 style={{ marginTop: 0, color: 'var(--primary)', fontSize: '14px', textAlign: 'center', border: 'none' }}>⭐ Evalúa a tu Tutor (Obligatorio)</h4>
                   
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>Trato y Profesionalismo:</label>
-                  <select value={evalTrato} onChange={(e) => setEvalTrato(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.5)', color: 'var(--text-light)' }}>
-                    <option value="">Omitir calificación...</option><option value="5">⭐⭐⭐⭐⭐ - Excelente</option><option value="4">⭐⭐⭐⭐ - Bueno</option><option value="3">⭐⭐⭐ - Regular</option><option value="2">⭐⭐ - Deficiente</option><option value="1">⭐ - Malo</option>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-light)', marginBottom: '6px', textTransform: 'uppercase' }}>Trato y Profesionalismo:</label>
+                  <select value={evalTrato} onChange={(e) => setEvalTrato(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: evalTrato ? '1px solid var(--success)' : '1px solid var(--danger)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.5)', color: 'var(--text-light)' }}>
+                    <option value="">Selecciona calificación...</option><option value="5">⭐⭐⭐⭐⭐ - Excelente</option><option value="4">⭐⭐⭐⭐ - Bueno</option><option value="3">⭐⭐⭐ - Regular</option><option value="2">⭐⭐ - Deficiente</option><option value="1">⭐ - Malo</option>
                   </select>
 
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>Claridad de Instrucción:</label>
-                  <select value={evalInstruccion} onChange={(e) => setEvalInstruccion(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.5)', color: 'var(--text-light)' }}>
-                    <option value="">Omitir calificación...</option><option value="5">⭐⭐⭐⭐⭐ - Excelente</option><option value="4">⭐⭐⭐⭐ - Bueno</option><option value="3">⭐⭐⭐ - Regular</option><option value="2">⭐⭐ - Deficiente</option><option value="1">⭐ - Malo</option>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-light)', marginBottom: '6px', textTransform: 'uppercase' }}>Claridad de Instrucción:</label>
+                  <select value={evalInstruccion} onChange={(e) => setEvalInstruccion(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: evalInstruccion ? '1px solid var(--success)' : '1px solid var(--danger)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.5)', color: 'var(--text-light)' }}>
+                    <option value="">Selecciona calificación...</option><option value="5">⭐⭐⭐⭐⭐ - Excelente</option><option value="4">⭐⭐⭐⭐ - Bueno</option><option value="3">⭐⭐⭐ - Regular</option><option value="2">⭐⭐ - Deficiente</option><option value="1">⭐ - Malo</option>
                   </select>
                 </div>
 

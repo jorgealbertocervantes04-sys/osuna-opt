@@ -155,5 +155,41 @@ export const dataService = {
   async guardarExamen(datos) {
     const { error } = await supabase.from('resultados_examenes').insert([datos]);
     return { exito: !error, error };
+  },
+
+  // --- NUEVAS FUNCIONES PARA LOS CATÁLOGOS Y PERFIL ---
+  obtenerCatalogos: async () => {
+    try {
+      const [resUni, resLid, resGer] = await Promise.all([
+        supabase.from('cat_unidades').select('nombre'),
+        supabase.from('cat_lideres').select('nombre'),
+        supabase.from('cat_gerentes').select('nombre')
+      ]);
+      return {
+        unidades: resUni.data || [],
+        lideres: resLid.data || [],
+        gerentes: resGer.data || []
+      };
+    } catch (error) {
+      console.error("Error cargando catálogos:", error);
+      return { unidades: [], lideres: [], gerentes: [] };
+    }
+  },
+
+  actualizarPerfilAlumno: async function (id_alumno, perfilData) {
+    try {
+      const { error } = await supabase
+        .from('usuarios')
+        .update({
+          ...perfilData,
+          fecha_actualizacion_perfil: new Date().toISOString()
+        })
+        .eq('id', id_alumno);
+
+      if (error) throw error;
+      return { exito: true };
+    } catch (error) {
+      return { exito: false, error };
+    }
   }
 };
