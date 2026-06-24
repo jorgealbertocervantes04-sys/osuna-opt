@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route, Link } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute'; // Importamos el protector
+import logoTrayecto from './assets/logo-trayecto.png'
 
 // Importaciones de la App Móvil
 import OperadorLayout from './pages/Operador/OperadorLayout';
