@@ -1,4 +1,4 @@
-import { Routes, Route, Link } from 'react-router-dom';
+
 import ProtectedRoute from './components/ProtectedRoute'; // Importamos el protector
 
 // Importaciones de la App Móvil
@@ -33,47 +33,49 @@ const Portal = () => (
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Portal />} />
-      
-      {/* RUTAS DE LA APP MÓVIL */}
-      <Route path="/app" element={<OperadorLayout />}>
-        <Route index element={<LoginApp />} />
-        {/* Rutas protegidas para Alumnos */}
-        <Route path="alumno" element={
-          <ProtectedRoute role="app">
-            <DashboardAlumno />
-          </ProtectedRoute>
-        } />
-        {/* Rutas protegidas para Tutores */}
-        <Route path="tutor" element={
-          <ProtectedRoute role="app">
-            <DashboardTutor />
-          </ProtectedRoute>
-        } />
-      </Route>
+    <HashRouter>
+      <Routes>
+        <Route path="/" element={<Portal />} />
+        
+        {/* RUTAS DE LA APP MÓVIL */}
+        <Route path="/app" element={<OperadorLayout />}>
+          <Route index element={<LoginApp />} />
+          {/* Rutas protegidas para Alumnos */}
+          <Route path="alumno" element={
+            <ProtectedRoute role="app">
+              <DashboardAlumno />
+            </ProtectedRoute>
+          } />
+          {/* Rutas protegidas para Tutores */}
+          <Route path="tutor" element={
+            <ProtectedRoute role="app">
+              <DashboardTutor />
+            </ProtectedRoute>
+          } />
+        </Route>
 
-      {/* RUTAS DEL PANEL ADMINISTRATIVO */}
-      {/* Separamos el Login en su propia ruta independiente */}
-      <Route path="/admin-login" element={<LoginAdmin />} />
-      
-      {/* Esta es la Gran Carpeta "/admin" protegida */}
-      <Route path="/admin" element={
-        <ProtectedRoute role="admin">
-          <AdminLayout />
-        </ProtectedRoute>
-      }>
-        <Route path="dashboard" element={<AdminDashboard />} />
-        <Route path="directorio" element={<Directorio />} />
-        <Route path="viajes" element={<Viajes />} />
-        <Route path="auditoria-opt" element={<AuditoriaOPT />} />
-        <Route path="academia" element={<Academia />} />
-        <Route path="reportes" element={<Reportes />} />
-        <Route path="asistencias" element={<Asistencias />} />
-        <Route path="cardex" element={<Cardex />} />
-        <Route path="encuestas" element={<Encuestas />} />
-      </Route>
-    </Routes>
+        {/* RUTAS DEL PANEL ADMINISTRATIVO */}
+        {/* Separamos el Login en su propia ruta independiente */}
+        <Route path="/admin-login" element={<LoginAdmin />} />
+        
+        {/* Esta es la Gran Carpeta "/admin" protegida */}
+        <Route path="/admin" element={
+          <ProtectedRoute role="admin">
+            <AdminLayout />
+          </ProtectedRoute>
+        }>
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="directorio" element={<Directorio />} />
+          <Route path="viajes" element={<Viajes />} />
+          <Route path="auditoria-opt" element={<AuditoriaOPT />} />
+          <Route path="academia" element={<Academia />} />
+          <Route path="reportes" element={<Reportes />} />
+          <Route path="asistencias" element={<Asistencias />} />
+          <Route path="cardex" element={<Cardex />} />
+          <Route path="encuestas" element={<Encuestas />} />
+        </Route>
+      </Routes>
+    </HashRouter>
   );
 }
 
