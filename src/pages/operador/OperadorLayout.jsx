@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 
 export default function OperadorLayout() {
+  // --- ESTADOS ---
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [modalSoporteAbierto, setModalSoporteAbierto] = useState(false);
 
-  // Detector de conexión a Internet en tiempo real
+  // --- DETECTOR DE CONEXIÓN A INTERNET (Tiempo Real) ---
   useEffect(() => {
     const handleOffline = () => setIsOffline(true);
     const handleOnline = () => {
@@ -22,18 +24,7 @@ export default function OperadorLayout() {
     };
   }, []);
 
-  const abrirSoporte = () => {
-    alert("Próximamente: Se abrirá el modal de contacto con Jorge o Raymundo.");
-  };
-  // 1. Las importaciones van hasta arriba
-import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
-
-export default function TuComponente() {
-  
-  // 2. AQUÍ PEGAS EL ESTADO Y LAS FUNCIONES (Antes del return)
-  const [modalSoporteAbierto, setModalSoporteAbierto] = useState(false);
-
+  // --- LÓGICA DE SOPORTE ---
   const abrirSoporte = () => {
     setModalSoporteAbierto(true);
   };
@@ -42,7 +33,8 @@ export default function TuComponente() {
     const mensaje = encodeURIComponent(`Hola ${coordinador}, necesito asistencia en la plataforma.`);
     window.open(`https://wa.me/${telefono}?text=${mensaje}`, '_blank');
   };
-}
+
+  // --- RENDERIZADO DEL LAYOUT ---
   return (
     <>
       {/* Banner Offline */}
@@ -56,7 +48,7 @@ export default function TuComponente() {
         </div>
       )}
 
-     {/* Botón Flotante de Soporte */}
+      {/* Botón Flotante de Soporte */}
       <button 
         className="fab-soporte" 
         onClick={abrirSoporte} 
@@ -116,9 +108,9 @@ export default function TuComponente() {
                   Experiencia y soporte OPT
                 </span>
                 <h3 style={{ margin: '15px 0 5px 0', fontSize: '18px', fontWeight: 700 }}>Jorge Osuna</h3>
-                <p style={{ margin: '0 0 15px 0', fontSize: '13px', color: 'gray' }}>+52 123 456 7890</p>
+                <p style={{ margin: '0 0 15px 0', fontSize: '13px', color: 'gray' }}>+52 81 1544 8828</p>
                 <button 
-                  onClick={() => abrirWhatsApp('528115448828', 'Jorge')} // <- PON EL NÚMERO AQUÍ
+                  onClick={() => abrirWhatsApp('528115448828', 'Jorge')}
                   style={{ background: '#25D366', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '10px', fontWeight: 700, width: '100%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 >
                   Contactar vía WhatsApp
@@ -131,9 +123,9 @@ export default function TuComponente() {
                   Seguimiento OPT
                 </span>
                 <h3 style={{ margin: '15px 0 5px 0', fontSize: '18px', fontWeight: 700 }}>Raymundo Martínez</h3>
-                <p style={{ margin: '0 0 15px 0', fontSize: '13px', color: 'gray' }}>+52 123 456 7890</p>
+                <p style={{ margin: '0 0 15px 0', fontSize: '13px', color: 'gray' }}>+52 81 1662 6699</p>
                 <button 
-                  onClick={() => abrirWhatsApp('528116626699', 'Raymundo')} // <- PON EL NÚMERO AQUÍ
+                  onClick={() => abrirWhatsApp('528116626699', 'Raymundo')}
                   style={{ background: '#25D366', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '10px', fontWeight: 700, width: '100%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 >
                   Contactar vía WhatsApp
