@@ -26,6 +26,7 @@ export default function DashboardAlumno() {
   const [manejaHoy, setManejaHoy] = useState('SI');
   const [actividadSinManejo, setActividadSinManejo] = useState('Apoyo en Patio');
   const [asistenciaEnviada, setAsistenciaEnviada] = useState(false);
+  const [registrandoAsistencia, setRegistrandoAsistencia] = useState(false); // 👈 CANDADO: Bloqueo de UI mientras lee GPS
 
   // Estados para Viajes (Bitácora)
   const [estadoViaje, setEstadoViaje] = useState('reposo'); 
@@ -119,16 +120,64 @@ export default function DashboardAlumno() {
     }
   };
 
-  const marcarAsistencia = async () => {
-    const payload = {
-      id_usuario: usuarioActual.id,
-      ubicacion_texto: "Registro Web / App",
-      actividad_sin_manejo: manejaHoy === 'NO' ? actividadSinManejo : null,
-      fecha_hora: new Date().toISOString()
+  // 📍 CANDADO DE GEOLOCALIZACIÓN ESTRICTA E INFALIBLE
+  const marcarAsistencia = () => {
+    if (!navigator.geolocation) {
+      return alert("❌ Tu dispositivo o navegador no soporta el servicio de geolocalización. No puedes registrar asistencia.");
+    }
+
+    setRegistrandoAsistencia(true);
+
+    const opcionesGps = {
+      enableHighAccuracy: true, // Fuerza al dispositivo a usar GPS real en vez de aproximación por IP
+      timeout: 10000,           // Espera máxima de 10 segundos
+      maximumAge: 0             // No usar posiciones guardadas en caché
     };
-    await dataService.registrarAsistencia(payload);
-    setAsistenciaEnviada(true);
-    alert("✓ Asistencia registrada corporativamente.");
+
+    navigator.geolocation.getCurrentPosition(
+      async (posicion) => {
+        const { latitude, longitude } = posicion.coords;
+
+        // Construimos el objeto mandando latitud y longitud explícitas
+        const payload = {
+          id_usuario: usuarioActual.id,
+          ubicacion_texto: `GPS: ${latitude}, ${longitude}`,
+          latitud: latitude,   // Se guardan numéricas si alteraste la tabla
+          longitud: longitude, // Se guardan numéricas si alteraste la tabla
+          actividad_sin_manejo: manejaHoy === 'NO' ? actividadSinManejo : null,
+          fecha_hora: new Date().toISOString()
+        };
+
+        try {
+          await dataService.registrarAsistencia(payload);
+          setAsistenciaEnviada(true);
+          alert("✓ Asistencia registrada corporativamente con ubicación verificada.");
+        } catch (error) {
+          alert("❌ Error al guardar en base de datos: " + error?.message);
+        } finally {
+          setRegistrandoAsistencia(false);
+        }
+      },
+      (errorGps) => {
+        setRegistrandoAsistencia(false);
+
+        // Bloqueo total si el operador intenta jugarle al vivo
+        switch (errorGps.code) {
+          case errorGps.PERMISSION_DENIED:
+            alert("⛔ CANDADO DE SEGURIDAD: Has denegado el acceso a tu ubicación. Para marcar asistencia es OBLIGATORIO activar y permitir el GPS en la configuración de tu celular o navegador.");
+            break;
+          case errorGps.POSITION_UNAVAILABLE:
+            alert("📡 ERROR: La señal del GPS no está disponible. Sal a un espacio abierto o activa los datos móviles.");
+            break;
+          case errorGps.TIMEOUT:
+            alert("⏱️ ERROR: Se agotó el tiempo de espera para obtener el GPS. Intenta registrar tu asistencia de nuevo.");
+            break;
+          default:
+            alert("❌ Ocurrió un error inesperado al intentar capturar tu ubicación.");
+        }
+      },
+      opcionesGps
+    );
   };
 
   const iniciarRuta = async () => {
@@ -296,8 +345,25 @@ export default function DashboardAlumno() {
                     <option value="Unidad en Taller">Unidad en Taller</option>
                   </select>
                 )}
-                <button onClick={marcarAsistencia} style={{ width: '100%', padding: '16px', background: 'var(--success)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' }}>
-                  Registrar Entrada (GPS)
+                
+                {/* 👈 MODIFICADO: Botón interactivo que muta de color y estado mientras valida */}
+                <button 
+                  onClick={marcarAsistencia} 
+                  disabled={registrandoAsistencia}
+                  style={{ 
+                    width: '100%', 
+                    padding: '16px', 
+                    background: registrandoAsistencia ? '#64748b' : 'var(--success)', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: '12px', 
+                    fontSize: '16px', 
+                    fontWeight: 700, 
+                    cursor: registrandoAsistencia ? 'not-allowed' : 'pointer', 
+                    boxShadow: registrandoAsistencia ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)' 
+                  }}
+                >
+                  {registrandoAsistencia ? '⏳ Validando GPS...' : 'Registrar Entrada (GPS)'}
                 </button>
               </div>
             ) : (
