@@ -19,11 +19,12 @@ export default function Directorio() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [idEditando, setIdEditando] = useState(null);
   
-  // Estado del formulario del modal
+  // Estado del formulario del modal (SE AGREGA fecha_entrega_operacion)
   const [formData, setFormData] = useState({
     nombre_completo: '', generacion: '', telefono: '', numero_empleado: '',
     rol: 'Alumno', estatus: 'En proceso', empresa: '', unidad_negocio: '',
-    lider: '', gerente: '', opt_asignado: '', certificacion_opt: 'No Aplica'
+    lider: '', gerente: '', opt_asignado: '', certificacion_opt: 'No Aplica',
+    fecha_entrega_operacion: '' 
   });
 
   // CARGAR DATOS REALES AL INICIAR LA PANTALLA
@@ -75,7 +76,8 @@ export default function Directorio() {
     setFormData({
       nombre_completo: '', generacion: '', telefono: '', numero_empleado: '',
       rol: 'Alumno', estatus: 'En proceso', empresa: '', unidad_negocio: '',
-      lider: '', gerente: '', opt_asignado: '', certificacion_opt: 'No Aplica'
+      lider: '', gerente: '', opt_asignado: '', certificacion_opt: 'No Aplica',
+      fecha_entrega_operacion: '' // Reset de fecha
     });
     setModalAbierto(true);
   };
@@ -88,7 +90,8 @@ export default function Directorio() {
       rol: usuario.rol || 'Alumno', estatus: usuario.estatus || 'En proceso', 
       empresa: usuario.empresa || '', unidad_negocio: usuario.unidad_negocio || '',
       lider: usuario.lider || '', gerente: usuario.gerente || '', 
-      opt_asignado: usuario.opt_asignado || '', certificacion_opt: usuario.certificacion_opt || 'No Aplica'
+      opt_asignado: usuario.opt_asignado || '', certificacion_opt: usuario.certificacion_opt || 'No Aplica',
+      fecha_entrega_operacion: usuario.fecha_entrega_operacion || '' // Carga de fecha desde DB
     });
     setModalAbierto(true);
   };
@@ -187,7 +190,7 @@ export default function Directorio() {
         </div>
       </div>
 
-      {/* TABLA PRINCIPAL (Restaurada) */}
+      {/* TABLA PRINCIPAL */}
       <div style={{ background: 'var(--card-bg)', borderRadius: '16px', border: '1px solid var(--border-color)', overflow: 'auto', boxShadow: '0 10px 20px rgba(0,0,0,0.3)', marginBottom: '30px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px', color: 'var(--text-light)' }}>
           <thead>
@@ -195,7 +198,7 @@ export default function Directorio() {
               <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Nombre y Contacto</th>
               <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Generación</th>
               <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Rol Asignado</th>
-              <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Jerarquía</th>
+              <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Jerarquía y OPT</th>
               <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Estatus</th>
               <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Acciones</th>
             </tr>
@@ -223,6 +226,13 @@ export default function Directorio() {
                     <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)', fontSize: '12px' }}>
                       <span style={{ color: 'var(--text-muted)' }}>Líder:</span> <b style={{ color: 'var(--info)' }}>{u.lider || <span style={{color:'var(--danger)'}}>N/A</span>}</b><br/>
                       <span style={{ color: 'var(--text-muted)' }}>OPT:</span> <b style={{ color: 'var(--purple)' }}>{u.opt_asignado || <span style={{color:'var(--danger)'}}>N/A</span>}</b>
+                      {/* INDICADOR VISUAL DEL SEGURO OPT */}
+                      {u.rol === 'Alumno' && u.fecha_entrega_operacion && (
+                        <>
+                          <br/>
+                          <span style={{ color: 'var(--text-muted)' }}>Banderazo OPT:</span> <b style={{ color: 'var(--success)' }}>{u.fecha_entrega_operacion}</b>
+                        </>
+                      )}
                     </td>
                     <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}>
                       <span style={{ padding: '6px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, backgroundColor: colEstatus.bg, color: colEstatus.text, border: `1px solid ${colEstatus.b}` }}>
@@ -283,13 +293,30 @@ export default function Directorio() {
               <div><label style={labelStyle}>Líder Asignado</label><input type="text" name="lider" value={formData.lider} onChange={handleChangeForm} style={inputStyle} /></div>
               <div><label style={labelStyle}>Gerente Asignado</label><input type="text" name="gerente" value={formData.gerente} onChange={handleChangeForm} style={inputStyle} /></div>
 
+              {/* SECCIÓN EXPANDIDA PARA ALUMNOS: TUTOR + SEGURO CALENDARIO */}
               {formData.rol === 'Alumno' && (
-                <div style={{ gridColumn: 'span 2', background: 'rgba(139, 92, 246, 0.1)', padding: '15px', borderRadius: '8px', border: '1px dashed var(--purple)' }}>
-                  <label style={{ ...labelStyle, color: 'var(--purple)' }}>👨‍🏫 Asignar Tutor (OPT)</label>
-                  <select name="opt_asignado" value={formData.opt_asignado} onChange={handleChangeForm} style={{ ...inputStyle, marginBottom: 0, borderColor: 'var(--purple)' }}>
-                    <option value="">Seleccionar Tutor...</option>
-                    {optDisponibles.map(t => <option key={t.id} value={t.nombre_completo}>{t.nombre_completo}</option>)}
-                  </select>
+                <div style={{ gridColumn: 'span 2', background: 'rgba(139, 92, 246, 0.1)', padding: '20px', borderRadius: '12px', border: '1px dashed var(--purple)', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  <div>
+                    <label style={{ ...labelStyle, color: 'var(--purple)' }}>👨‍🏫 Asignar Tutor (OPT)</label>
+                    <select name="opt_asignado" value={formData.opt_asignado} onChange={handleChangeForm} style={{ ...inputStyle, marginBottom: 0, borderColor: 'var(--purple)' }}>
+                      <option value="">Seleccionar Tutor...</option>
+                      {optDisponibles.map(t => <option key={t.id} value={t.nombre_completo}>{t.nombre_completo}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ ...labelStyle, color: 'var(--purple)' }}>📅 Fecha de Entrega a la Operación (Banderazo OPT)</label>
+                    <input 
+                      type="date" 
+                      name="fecha_entrega_operacion" 
+                      value={formData.fecha_entrega_operacion} 
+                      onChange={handleChangeForm} 
+                      style={{ ...inputStyle, marginBottom: 0, borderColor: 'var(--purple)', colorScheme: 'dark' }} 
+                    />
+                    <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                      * Al ingresar esta fecha, los viajes se anclarán estrictamente a su semana calendario correspondiente. Los kilómetros extra se quedarán en la misma semana y no afectarán las metas subsecuentes.
+                    </p>
+                  </div>
                 </div>
               )}
 
