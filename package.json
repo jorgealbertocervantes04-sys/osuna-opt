@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -13,10 +14,10 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
     "chart.js": "^4.5.1",
+    "csv-parser": "^3.2.1",
     "lucide-react": "^1.21.0",
     "react": "^19.2.7",
     "react-chartjs-2": "^5.3.1",
