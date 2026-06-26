@@ -10,7 +10,7 @@ import DashboardAlumno from './pages/Operador/DashboardAlumno';
 import DashboardTutor from './pages/Operador/DashboardTutor';
 
 // Importaciones del Panel de general
-import AdminLayout from './pages/Admin/AdminLayout';
+
 import AdminDashboardGeneral from './pages/Admin/AdminDashboardGeneral';
 
 // Importaciones del Panel de Administración
