@@ -2,7 +2,7 @@ import { HashRouter, Routes, Route, Link } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // CORRECCIÓN: Falta una barra "/" después del punto
-import logotrayecto from './logo-trayecto.png'; 
+import logotrayecto from "./assets/logo-trayecto.png";
 
 // Importaciones de la App Móvil
 import OperadorLayout from './pages/Operador/OperadorLayout';
