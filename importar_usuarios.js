@@ -3,10 +3,9 @@ import fs from 'fs';
 import csv from 'csv-parser';
 
 // 1. Configuración (Usa variables de entorno si puedes, pero para local esto basta)
-const supabaseUrl = 'TU_URL_AQUI'; // La encuentras en Project Settings > API
-const supabaseServiceRoleKey = 'TU_SERVICE_ROLE_KEY_AQUI'; // ¡NO COMPARTAS ESTA LLAVE!
-
-const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+const supabaseUrl = 'https://qykubittvlwsavrhljek.supabase.co'; // La encuentras en Project Settings > API
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5a3ViaXR0dmx3c2F2cmhsamVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMTY1ODUsImV4cCI6MjA5NjU5MjU4NX0.5vcZXG7qTAqVO87EChPbQVIDeVvmNuBCrjIUddySMzk';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function importarUsuarios() {
   const stream = fs.createReadStream('usuarios.csv');
