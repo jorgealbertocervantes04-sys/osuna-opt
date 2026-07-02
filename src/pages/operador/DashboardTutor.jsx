@@ -44,28 +44,50 @@ export default function DashboardTutor() {
     setRubrica(prev => ({ ...prev, [campo]: valor }));
   };
 
+  // Limpiar el formulario completo
+  const limpiarFormulario = () => {
+    setAlumnoSeleccionado('');
+    setNotas('');
+    setRubrica({ seg1:'', seg2:'', seg3:'', tec1:'', tec2:'', tec3:'', act1:'', act2:'', act3:'' });
+  };
+
+  // Cálculos en tiempo real para la interfaz del Tutor
+  const obtenerCalculosEnVivo = () => {
+    const valores = Object.values(rubrica);
+    const respondidas = valores.filter(v => v !== '').length;
+    
+    const suma = valores.reduce((acc, curr) => acc + (parseInt(curr) || 0), 0);
+    const promedio = (suma / 9).toFixed(2);
+    
+    let semaforo = "Rojo";
+    let colorHex = "#ef4444"; // Rojo Tailwind
+    
+    if (promedio >= 4.0) {
+      className = "Verde";
+      colorHex = "#22c55e"; // Verde
+    } else if (promedio >= 3.0) {
+      className = "Amarillo";
+      colorHex = "#eab308"; // Amarillo
+    }
+
+    return { promedio, semaforo, colorHex, respondidas };
+  };
+
+  const { promedio, semaforo, colorHex, respondidas } = obtenerCalculosEnVivo();
+  const alumnoActivoInfo = alumnos.find(a => a.id === alumnoSeleccionado);
+
   // 2. Enviar Evaluación a Supabase
   const enviarEvaluacionTutor = async () => {
-    if (!alumnoSeleccionado) return alert("Paso 1: Selecciona alumno.");
-    if (notas.trim().length < 15) return alert("Paso 3: Justificación requerida (Mín 15 letras).");
+    if (!alumnoSeleccionado) return alert("Paso 1: Selecciona un alumno.");
+    if (notas.trim().length < 15) return alert("Paso 3: Justificación requerida (Mín. 15 letras).");
 
-    // Validar que todas las preguntas estén contestadas (opcional, pero recomendado)
-    const valores = Object.values(rubrica);
-    if (valores.includes('')) {
-      const confirmar = window.confirm("⚠️ Tienes preguntas sin calificar. ¿Deseas enviarlo así? Las vacías contarán como 0.");
+    // Validar preguntas sin contestar
+    if (respondidas < 9) {
+      const confirmar = window.confirm(`⚠️ Tienes ${9 - respondidas} preguntas sin calificar. ¿Deseas enviarlo así? Las vacías contarán como 0.`);
       if (!confirmar) return;
     }
 
     setEnviando(true);
-
-    // Calcular Promedio
-    const suma = 
-      (parseInt(rubrica.seg1) || 0) + (parseInt(rubrica.seg2) || 0) + (parseInt(rubrica.seg3) || 0) +
-      (parseInt(rubrica.tec1) || 0) + (parseInt(rubrica.tec2) || 0) + (parseInt(rubrica.tec3) || 0) +
-      (parseInt(rubrica.act1) || 0) + (parseInt(rubrica.act2) || 0) + (parseInt(rubrica.act3) || 0);
-    
-    const promedio = (suma / 9).toFixed(2);
-    const semaforo = promedio >= 4.0 ? "Verde" : promedio >= 3.0 ? "Amarillo" : "Rojo";
 
     // Armar el paquete de datos para la base de datos
     const payload = {
@@ -73,7 +95,7 @@ export default function DashboardTutor() {
       id_tutor: usuarioActual.id,
       promedio_final: parseFloat(promedio),
       semaforo: semaforo,
-      notas_texto: notas,
+      notes_texto: notas,
       fecha_evaluacion: new Date().toISOString()
     };
 
@@ -81,10 +103,7 @@ export default function DashboardTutor() {
 
     if (exito) {
       alert(`✓ Calificación Emitida a Corporativo.\nPromedio: ${promedio}\nSemáforo: ${semaforo}`);
-      // Limpiar formulario tras enviar exitosamente
-      setAlumnoSeleccionado('');
-      setNotas('');
-      setRubrica({ seg1:'', seg2:'', seg3:'', tec1:'', tec2:'', tec3:'', act1:'', act2:'', act3:'' });
+      limpiarFormulario();
     } else {
       alert("Error al enviar la evaluación: " + error.message);
     }
@@ -95,7 +114,7 @@ export default function DashboardTutor() {
   if (cargandoDatos) return <div style={{ color: 'white', textAlign: 'center', padding: '50px' }}>Cargando expediente de operadores...</div>;
 
   return (
-    <div className="seccion activa" style={{ animation: 'fadeIn 0.4s ease' }}>
+    <div className="seccion activa" style={{ animation: 'fadeIn 0.4s ease', maxWidth: '800px', margin: '0 auto' }}>
       
       {/* CABECERA Y BOTÓN DE CLAVE */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', borderBottom: '1px solid var(--border-color)', paddingBottom: '15px' }}>
@@ -111,13 +130,32 @@ export default function DashboardTutor() {
         </button>
       </div>
 
+      {/* PANEL DE VISTA PREVIA EN TIEMPO REAL */}
+      <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: `1px solid ${colorHex}`, borderRadius: '16px', padding: '15px 22px', marginBottom: '22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.3s ease' }}>
+        <div style={{ textAlign: 'left' }}>
+          <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>Previsualización en Vivo</span>
+          <h5 style={{ margin: '5px 0 0 0', color: 'var(--text-light)', fontSize: '15px' }}>
+            {alumnoActivoInfo ? `Evaluando a: ${alumnoActivoInfo.nombre_completo}` : 'Selecciona un operador abajo'}
+          </h5>
+          <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+            Progreso rúbrica: <strong style={{ color: respondidas === 9 ? '#22c55e' : 'var(--text-light)' }}>{respondidas} de 9</strong> calificadas
+          </p>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '24px', fontWeight: 900, color: colorHex }}>{promedio}</div>
+          <span style={{ backgroundColor: colorHex, color: '#000', padding: '2px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' }}>
+            {semaforo}
+          </span>
+        </div>
+      </div>
+
       {/* 1. EXPEDIENTE DEL ALUMNO */}
       <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '22px', marginBottom: '22px', textAlign: 'left' }}>
         <h4 style={{ marginTop: 0, color: 'var(--text-light)', marginBottom: '15px', fontSize: '16px', fontWeight: 800, borderBottom: 'none' }}>1. Expediente del Alumno</h4>
         <select 
           value={alumnoSeleccionado}
           onChange={(e) => setAlumnoSeleccionado(e.target.value)}
-          style={{ width: '100%', padding: '14px 18px', margin: 0, border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', fontSize: '15px' }}
+          style={{ width: '100%', padding: '14px 18px', margin: 0, border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', fontSize: '15px', outline: 'none' }}
         >
           <option value="">-- Operador a evaluar --</option>
           {alumnos.map(a => (
@@ -136,17 +174,17 @@ export default function DashboardTutor() {
         <h4 style={{ color: 'var(--danger)', fontSize: '15px', margin: '20px 0 10px 0' }}>🛡️ Seguridad Crítica</h4>
         
         <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>1. Inspección Físico-Mecánica</label>
-        <select value={rubrica.seg1} onChange={(e) => handleChange('seg1', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
+        <select value={rubrica.seg1} onChange={(e) => handleChange('seg1', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: rubrica.seg1 ? '1px solid var(--border-color)' : '1px dashed #4b5563', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
           <option value="">-- Calificar --</option><option value="5">5 - Excelente</option><option value="4">4 - Bueno</option><option value="3">3 - Regular</option><option value="2">2 - Deficiente</option><option value="1">1 - Crítico</option>
         </select>
 
         <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>2. Hábitos (Cinturón, Cero Celular)</label>
-        <select value={rubrica.seg2} onChange={(e) => handleChange('seg2', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
+        <select value={rubrica.seg2} onChange={(e) => handleChange('seg2', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: rubrica.seg2 ? '1px solid var(--border-color)' : '1px dashed #4b5563', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
           <option value="">-- Calificar --</option><option value="5">5 - Excelente</option><option value="4">4 - Bueno</option><option value="3">3 - Regular</option><option value="2">2 - Deficiente</option><option value="1">1 - Crítico</option>
         </select>
 
         <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>3. Manejo Defensivo</label>
-        <select value={rubrica.seg3} onChange={(e) => handleChange('seg3', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '25px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
+        <select value={rubrica.seg3} onChange={(e) => handleChange('seg3', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '25px', border: rubrica.seg3 ? '1px solid var(--border-color)' : '1px dashed #4b5563', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
           <option value="">-- Calificar --</option><option value="5">5 - Excelente</option><option value="4">4 - Bueno</option><option value="3">3 - Regular</option><option value="2">2 - Deficiente</option><option value="1">1 - Crítico</option>
         </select>
 
@@ -154,17 +192,17 @@ export default function DashboardTutor() {
         <h4 style={{ color: 'var(--info)', fontSize: '15px', margin: '20px 0 10px 0' }}>⚙️ Conducción Técnica</h4>
         
         <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>4. Rangos Económicos</label>
-        <select value={rubrica.tec1} onChange={(e) => handleChange('tec1', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
+        <select value={rubrica.tec1} onChange={(e) => handleChange('tec1', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: rubrica.tec1 ? '1px solid var(--border-color)' : '1px dashed #4b5563', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
           <option value="">-- Calificar --</option><option value="5">5 - Excelente</option><option value="4">4 - Bueno</option><option value="3">3 - Regular</option><option value="2">2 - Deficiente</option><option value="1">1 - Crítico</option>
         </select>
 
         <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>5. Educación Vial</label>
-        <select value={rubrica.tec2} onChange={(e) => handleChange('tec2', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
+        <select value={rubrica.tec2} onChange={(e) => handleChange('tec2', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: rubrica.tec2 ? '1px solid var(--border-color)' : '1px dashed #4b5563', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
           <option value="">-- Calificar --</option><option value="5">5 - Excelente</option><option value="4">4 - Bueno</option><option value="3">3 - Regular</option><option value="2">2 - Deficiente</option><option value="1">1 - Crítico</option>
         </select>
 
         <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>6. Freno de Motor / Patio</label>
-        <select value={rubrica.tec3} onChange={(e) => handleChange('tec3', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '25px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
+        <select value={rubrica.tec3} onChange={(e) => handleChange('tec3', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '25px', border: rubrica.tec3 ? '1px solid var(--border-color)' : '1px dashed #4b5563', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
           <option value="">-- Calificar --</option><option value="5">5 - Excelente</option><option value="4">4 - Bueno</option><option value="3">3 - Regular</option><option value="2">2 - Deficiente</option><option value="1">1 - Crítico</option>
         </select>
 
@@ -172,39 +210,56 @@ export default function DashboardTutor() {
         <h4 style={{ color: 'var(--success)', fontSize: '15px', margin: '20px 0 10px 0' }}>🤝 Actitud y Emoción</h4>
         
         <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>7. Receptividad a Instrucción</label>
-        <select value={rubrica.act1} onChange={(e) => handleChange('act1', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
+        <select value={rubrica.act1} onChange={(e) => handleChange('act1', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: rubrica.act1 ? '1px solid var(--border-color)' : '1px dashed #4b5563', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
           <option value="">-- Calificar --</option><option value="5">5 - Excelente</option><option value="4">4 - Bueno</option><option value="3">3 - Regular</option><option value="2">2 - Deficiente</option><option value="1">1 - Crítico</option>
         </select>
 
         <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>8. Control del Estrés</label>
-        <select value={rubrica.act2} onChange={(e) => handleChange('act2', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
+        <select value={rubrica.act2} onChange={(e) => handleChange('act2', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: rubrica.act2 ? '1px solid var(--border-color)' : '1px dashed #4b5563', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
           <option value="">-- Calificar --</option><option value="5">5 - Excelente</option><option value="4">4 - Bueno</option><option value="3">3 - Regular</option><option value="2">2 - Deficiente</option><option value="1">1 - Crítico</option>
         </select>
 
         <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>9. Responsabilidad</label>
-        <select value={rubrica.act3} onChange={(e) => handleChange('act3', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
+        <select value={rubrica.act3} onChange={(e) => handleChange('act3', e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '10px', border: rubrica.act3 ? '1px solid var(--border-color)' : '1px dashed #4b5563', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
           <option value="">-- Calificar --</option><option value="5">5 - Excelente</option><option value="4">4 - Bueno</option><option value="3">3 - Regular</option><option value="2">2 - Deficiente</option><option value="1">1 - Crítico</option>
         </select>
       </div>
 
       {/* 3. JUSTIFICACIÓN Y ENVÍO */}
       <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '22px', marginBottom: '22px', textAlign: 'left' }}>
-        <h4 style={{ marginTop: 0, color: 'var(--text-light)', marginBottom: '15px', fontSize: '16px', fontWeight: 800, borderBottom: 'none' }}>3. Justificación</h4>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h4 style={{ margin: 0, color: 'var(--text-light)', fontSize: '16px', fontWeight: 800 }}>3. Justificación</h4>
+          <span style={{ fontSize: '12px', color: notas.trim().length >= 15 ? '#22c55e' : '#ef4444', fontWeight: 'bold' }}>
+            {notas.trim().length} / 15 letras mín.
+          </span>
+        </div>
         <textarea 
           value={notas}
           onChange={(e) => setNotas(e.target.value)}
           placeholder="Motivos de la calificación (Obligatorio, mín. 15 letras)" 
-          style={{ width: '100%', padding: '14px 18px', margin: 0, border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', height: '100px', boxSizing: 'border-box', fontFamily: 'inherit' }}
+          style={{ width: '100%', padding: '14px 18px', margin: 0, border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', height: '100px', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical', outline: 'none' }}
         ></textarea>
       </div>
 
-      <button 
-        onClick={enviarEvaluacionTutor}
-        disabled={enviando}
-        style={{ width: '100%', padding: '20px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: 700, cursor: enviando ? 'not-allowed' : 'pointer', boxShadow: enviando ? 'none' : '0 4px 15px var(--primary-glow)', opacity: enviando ? 0.7 : 1 }}
-      >
-        {enviando ? 'Guardando en Bóveda...' : 'Emitir Calificación'}
-      </button>
+      {/* BOTONES DE ACCIÓN */}
+      <div style={{ display: 'flex', gap: '15px' }}>
+        <button
+          onClick={limpiarFormulario}
+          disabled={enviando}
+          style={{ width: '30%', padding: '20px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }}
+        >
+          Limpiar
+        </button>
+        
+        <button 
+          onClick={enviarEvaluacionTutor}
+          disabled={enviando}
+          style={{ width: '70%', padding: '20px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: 700, cursor: enviando ? 'not-allowed' : 'pointer', boxShadow: enviando ? 'none' : '0 4px 15px var(--primary-glow)', opacity: enviando ? 0.7 : 1 }}
+        >
+          {enviando ? 'Guardando en Bóveda...' : 'Emitir Calificación'}
+        </button>
+      </div>
+
     </div>
   );
 }
