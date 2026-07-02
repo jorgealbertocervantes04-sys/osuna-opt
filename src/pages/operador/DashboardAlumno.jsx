@@ -49,6 +49,7 @@ export default function DashboardAlumno() {
   const [encuestaEstrellas, setEncuestaEstrellas] = useState('');
   const [encuestaComentarios, setEncuestaComentarios] = useState('');
 
+  // Matriz de Logros Escalonados
   const metasUDAT = [
     { sem: 1, km: 500, hrs: 10 }, 
     { sem: 2, km: 1500, hrs: 25 },
@@ -59,7 +60,6 @@ export default function DashboardAlumno() {
     { sem: 7, km: 2400, hrs: 34 }, 
     { sem: 8, km: 2400, hrs: 35 }
   ];
-
   useEffect(() => {
     const cargarTodo = async () => {
       const session = localStorage.getItem('udat_app_session');
@@ -68,37 +68,43 @@ export default function DashboardAlumno() {
       const user = JSON.parse(session);
       setUsuarioActual(user);
 
-      const [todosViajes, todosUsuarios, todosMateriales, catalogos] = await Promise.all([
-        dataService.obtenerViajes(),
-        dataService.obtenerUsuarios(),
-        dataService.obtenerMaterialEstudio(),
-        dataService.obtenerCatalogos()
-      ]);
+      try {
+        const [todosViajes, todosUsuarios, todosMateriales, catalogos] = await Promise.all([
+          dataService.obtenerViajes(),
+          dataService.obtenerUsuarios(),
+          dataService.obtenerMaterialEstudio(),
+          dataService.obtenerCatalogos()
+        ]);
 
-      const misViajes = todosViajes.filter(v => v.id_alumno === user.id);
-      setViajes(misViajes);
-      
-      setListaOPTs(todosUsuarios.filter(u => u.rol === 'Tutor'));
-      setMateriales(todosMateriales);
-      
-      setCatUnidades(catalogos.unidades);
-      setCatLideres(catalogos.lideres);
-      setCatGerentes(catalogos.gerentes);
+        const misViajes = todosViajes.filter(v => v.id_alumno === user.id);
+        setViajes(misViajes);
+        
+        setListaOPTs(todosUsuarios.filter(u => u.rol === 'Tutor'));
+        setMateriales(todosMateriales);
+        
+        // Asignación segura con fallbacks de arreglos vacíos
+        setCatUnidades(catalogos?.unidades || []);
+        setCatLideres(catalogos?.lideres || []);
+        setCatGerentes(catalogos?.gerentes || []);
 
-      const fechaUltima = user.fecha_actualizacion_perfil ? new Date(user.fecha_actualizacion_perfil) : new Date(0);
-      const diasTranscurridos = (new Date() - fechaUltima) / (1000 * 60 * 60 * 24);
+        // Cálculo aritmético seguro de tiempo transcurrido
+        const fechaUltima = user.fecha_actualizacion_perfil ? new Date(user.fecha_actualizacion_perfil) : new Date(0);
+        const diasTranscurridos = (new Date().getTime() - fechaUltima.getTime()) / (1000 * 60 * 60 * 24);
 
-      if (!user.unidad_negocio || !user.lider || !user.gerente || diasTranscurridos >= 7) {
-        setMostrarModalActualizacion(true);
+        if (!user.unidad_negocio || !user.lider || !user.gerente || diasTranscurridos >= 7) {
+          setMostrarModalActualizacion(true);
+        }
+
+        const viajeAbierto = misViajes.find(v => v.hora_fin === null);
+        if (viajeAbierto) {
+          setIdViajeActivo(viajeAbierto.id);
+          setEstadoViaje('progreso');
+        }
+      } catch (error) {
+        console.error("Error crítico cargando datos del alumno:", error);
+      } finally {
+        setCargandoDatos(false);
       }
-
-      const viajeAbierto = misViajes.find(v => v.hora_fin === null);
-      if (viajeAbierto) {
-        setIdViajeActivo(viajeAbierto.id);
-        setEstadoViaje('progreso');
-      }
-
-      setCargandoDatos(false);
     };
 
     cargarTodo();
@@ -225,13 +231,14 @@ export default function DashboardAlumno() {
     }
     
     const viajeOriginal = viajes.find(v => v.id === idViajeActivo);
-    const kmRecorridos = parseFloat(kmFinal) - (viajeOriginal?.km_iniciales || parseFloat(kmInicial));
+    const baseKmInicial = viajeOriginal ? parseFloat(viajeOriginal.km_iniciales) : parseFloat(kmInicial);
+    const kmRecorridos = parseFloat(kmFinal) - baseKmInicial;
     
     if (kmRecorridos < 0) return alert("El odómetro final no puede ser menor al inicial.");
 
     const horaFin = new Date();
     const horaInicioObj = viajeOriginal ? new Date(viajeOriginal.hora_inicio) : new Date();
-    const tiempoMinutos = Math.floor((horaFin - horaInicioObj) / 60000);
+    const tiempoMinutos = Math.floor((horaFin.getTime() - horaInicioObj.getTime()) / 60000);
 
     const payload = {
       hora_fin: horaFin.toISOString(),
@@ -538,22 +545,27 @@ export default function DashboardAlumno() {
               <option value="">¿A quién vas a evaluar?</option>
               <option value="LIDER">Líder Operativo</option>
               <option value="GERENTE">Gerente</option>
-               <option value="OPT">Opt</option>
+              <option value="OPT">Opt</option>
             </select>
             
             {encuestaTipo && (
               <>
                 <input type="text" value={encuestaNombre} onChange={e => setEncuestaNombre(e.target.value)} placeholder="Nombre de la persona..." style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', boxSizing: 'border-box' }} />
+                
                 <select value={encuestaEstrellas} onChange={e => setEncuestaEstrellas(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
-                  <option value="">Estrellas...</option>
-                  <option value="5">⭐⭐⭐⭐⭐</option>
-                  <option value="4">⭐⭐⭐⭐</option>
-                  <option value="3">⭐⭐⭐</option>
-                  <option value="2">⭐⭐</option>
-                  <option value="1">⭐</option>
+                  <option value="">Selecciona calificación...</option>
+                  <option value="5">⭐⭐⭐⭐⭐ - Excelente</option>
+                  <option value="4">⭐⭐⭐⭐ - Bueno</option>
+                  <option value="3">⭐⭐⭐ - Regular</option>
+                  <option value="2">⭐⭐ - Deficiente</option>
+                  <option value="1">⭐ - Malo</option>
                 </select>
-                <textarea value={encuestaComentarios} onChange={e => setEncuestaComentarios(e.target.value)} placeholder="Cuéntanos tu experiencia..." style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', height: '80px', boxSizing: 'border-box', fontFamily: 'inherit' }}></textarea>
-                <button onClick={enviarEncuesta} style={{ width: '100%', padding: '16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 15px var(--primary-glow)' }}>Enviar Privado</button>
+
+                <textarea value={encuestaComentarios} onChange={e => setEncuestaComentarios(e.target.value)} placeholder="Escribe tus comentarios o sugerencias corporativas..." style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', minHeight: '100px', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                
+                <button onClick={enviarEncuesta} style={{ width: '100%', padding: '16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 15px var(--primary-glow)' }}>
+                  Enviar Opinión a Corporativo
+                </button>
               </>
             )}
           </div>
