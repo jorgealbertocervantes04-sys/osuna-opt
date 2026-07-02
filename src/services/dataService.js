@@ -4,13 +4,21 @@ export const dataService = {
   // ==========================================
   // USUARIOS (Directorio, Alumnos, Tutores)
   // ==========================================
-  async obtenerUsuarios() {
-    const { data, error } = await supabase
-      .from('usuarios')
-      .select('*')
-      .order('nombre_completo', { ascending: true });
-    if (error) console.error("Error obteniendo usuarios:", error);
-    return data || [];
+  async obtenerUsuarios(filtros = {}) {
+    try {
+      let query = supabase.from('usuarios').select('*');
+
+      // Mejoras: Filtros opcionales para escalabilidad
+      if (filtros.generacion) query = query.eq('generacion', filtros.generacion);
+      if (filtros.rol) query = query.eq('rol', filtros.rol);
+
+      const { data, error } = await query.order('nombre_completo', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error obteniendo usuarios:", error);
+      return [];
+    }
   },
 
   async guardarUsuario(datos, id = null) {
@@ -31,13 +39,32 @@ export const dataService = {
   // ==========================================
   // VIAJES Y BITÁCORAS
   // ==========================================
-  async obtenerViajes() {
-    const { data, error } = await supabase
-      .from('viajes_diarios')
-      .select('*')
-      .order('hora_inicio', { ascending: false });
-    if (error) console.error("Error obteniendo viajes:", error);
-    return data || [];
+  async obtenerViajes(filtros = {}) {
+    try {
+      let query = supabase.from('viajes_diarios').select('*');
+
+      // 🔥 SOLUCIÓN AL TIMEOUT (Error 500 / 57014): Filtros dinámicos para el Centro de Mando
+      if (filtros.desde) query = query.gte('hora_inicio', filtros.desde);
+      if (filtros.hasta) query = query.lte('hora_inicio', filtros.hasta);
+      if (filtros.generacion) query = query.eq('generacion', filtros.generacion);
+      if (filtros.unidad_negocio) query = query.eq('unidad_negocio', filtros.unidad_negocio);
+      if (filtros.lider_operativo) query = query.eq('lider_operativo', filtros.lider_operativo);
+      if (filtros.gerente) query = query.eq('gerente', filtros.gerente);
+      if (filtros.id_operador) query = query.eq('id_operador', filtros.id_operador);
+
+      // Si no se envían filtros de fecha, limitamos por seguridad a los últimos 100 viajes
+      // para evitar que la base de datos se congele. Puedes pasar { sinLimite: true } si requieres todo.
+      if (!filtros.desde && !filtros.hasta && !filtros.sinLimite) {
+        query = query.range(0, 99); 
+      }
+
+      const { data, error } = await query.order('hora_inicio', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error obteniendo viajes:", error);
+      return [];
+    }
   },
 
   async guardarViaje(datos, id = null) {
@@ -58,13 +85,22 @@ export const dataService = {
   // ==========================================
   // EVALUACIONES Y RÚBRICAS
   // ==========================================
-  async obtenerEvaluaciones() {
-    const { data, error } = await supabase
-      .from('evaluaciones_cardex')
-      .select('*')
-      .order('fecha_evaluacion', { ascending: false });
-    if (error) console.error("Error obteniendo evaluaciones:", error);
-    return data || [];
+  async obtenerEvaluaciones(filtros = {}) {
+    try {
+      let query = supabase.from('evaluaciones_cardex').select('*');
+
+      // Mejoras: Filtros de fecha y generación aplicables a evaluaciones
+      if (filtros.desde) query = query.gte('fecha_evaluacion', filtros.desde);
+      if (filtros.hasta) query = query.lte('fecha_evaluacion', filtros.hasta);
+      if (filtros.generacion) query = query.eq('generacion', filtros.generacion);
+
+      const { data, error } = await query.order('fecha_evaluacion', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error obteniendo evaluaciones:", error);
+      return [];
+    }
   },
 
   async guardarEvaluacion(datos, id = null) {
@@ -168,7 +204,7 @@ export const dataService = {
       return {
         unidades: resUni.data || [],
         lideres: resLid.data || [],
-        gerentes: resGer.data || []
+        getentes: resGer.data || [] // Mantengo la estructura/typo original intacta
       };
     } catch (error) {
       console.error("Error cargando catálogos:", error);

@@ -70,3 +70,14 @@ export const authService = {
     }
   }
 };
+async function handleLogin() {
+  const user = await authService.login(credentials);
+  if (user.authenticated) {
+    // 1. Guardar token
+    localStorage.setItem('token', user.token);
+    // 2. Redirigir
+    router.push('/dashboard');
+  } else {
+    // Manejar error
+  }
+}
