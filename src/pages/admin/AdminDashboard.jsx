@@ -21,9 +21,13 @@ export default function AdminDashboard() {
   const [chartData, setChartData] = useState({ progreso: null, semaforos: null, kmtAgrupados: null });
   const [retrasosLideres, setRetrasosLideres] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [errorCritico, setErrorCritico] = useState(null); // Nuevo estado para manejo de errores
+  const [errorCritico, setErrorCritico] = useState(null); 
   
   const [vistaAgrupacion, setVistaAgrupacion] = useState('generacion'); 
+
+  // Desestructuramos los filtros para usarlos como dependencias primitivas en el useEffect
+  // Esto evita que la aplicación entre en un bucle infinito si el contexto recrea el objeto en cada render.
+  const { desde, hasta, generacion, unidad, lider, gerente } = filtrosGlobales || {};
 
   useEffect(() => {
     const calcularDashboard = async () => {
@@ -47,21 +51,32 @@ export default function AdminDashboard() {
         const evaluaciones = resE.data || [];
 
         // B) APLICAMOS FILTROS DE FECHAS Y GLOBALES
-        const fi = filtrosGlobales.desde ? new Date(filtrosGlobales.desde + 'T00:00:00') : new Date('2000-01-01');
-        const ff = filtrosGlobales.hasta ? new Date(filtrosGlobales.hasta + 'T23:59:59') : new Date('2100-01-01');
+        const fi = desde ? new Date(desde + 'T00:00:00') : new Date('2000-01-01');
+        const ff = hasta ? new Date(hasta + 'T23:59:59') : new Date('2100-01-01');
 
         const alumnosFiltrados = usuarios.filter(u => {
           if (u.rol !== 'Alumno') return false; 
-          let pasaGen = (filtrosGlobales.generacion === 'TODOS' || u.generacion === filtrosGlobales.generacion);
-          let pasaUni = (filtrosGlobales.unidad === 'TODOS' || u.unidad_negocio === filtrosGlobales.unidad);
-          let pasaLid = (filtrosGlobales.lider === 'TODOS' || u.lider === filtrosGlobales.lider);
-          let pasaGer = (filtrosGlobales.gerente === 'TODOS' || u.gerente === filtrosGlobales.gerente);
+          let pasaGen = (generacion === 'TODOS' || u.generacion === generacion);
+          let pasaUni = (unidad === 'TODOS' || u.unidad_negocio === unidad);
+          let pasaLid = (lider === 'TODOS' || u.lider === lider);
+          let pasaGer = (gerente === 'TODOS' || u.gerente === gerente);
           return pasaGen && pasaUni && pasaLid && pasaGer;
         });
 
         const idsAlumnos = alumnosFiltrados.map(a => a.id);
-        const viajesFiltrados = viajes.filter(v => idsAlumnos.includes(v.id_alumno) && new Date(v.hora_inicio) >= fi && new Date(v.hora_inicio) <= ff);
-        const evalsFiltradas = evaluaciones.filter(e => idsAlumnos.includes(e.id_alumno) && new Date(e.fecha_evaluacion) >= fi && new Date(e.fecha_evaluacion) <= ff);
+        
+        // Medida de seguridad: Validamos que las fechas de los viajes y evaluaciones sean correctas antes de comparar
+        const viajesFiltrados = viajes.filter(v => {
+          if (!v.hora_inicio || !idsAlumnos.includes(v.id_alumno)) return false;
+          const fechaV = new Date(v.hora_inicio);
+          return fechaV >= fi && fechaV <= ff;
+        });
+
+        const evalsFiltradas = evaluaciones.filter(e => {
+          if (!e.fecha_evaluacion || !idsAlumnos.includes(e.id_alumno)) return false;
+          const fechaE = new Date(e.fecha_evaluacion);
+          return fechaE >= fi && fechaE <= ff;
+        });
 
         // C) CALCULAMOS KPIs SUPERIORES Y AGRUPACIONES DINÁMICAS
         let kmTotales = 0;
@@ -72,7 +87,7 @@ export default function AdminDashboard() {
         };
 
         const dicAlumnos = {};
-        alumnosFiltrados.forEach(a => dicAlumnos[a.id] = a);
+        alumnosFiltrados.forEach(a => { if (a?.id) dicAlumnos[a.id] = a; });
 
         viajesFiltrados.forEach(v => {
           let km = parseFloat(v.km_recorridos) || 0;
@@ -97,7 +112,9 @@ export default function AdminDashboard() {
           }
         });
 
-        let promTotal = evalsFiltradas.length > 0 ? (evalsFiltradas.reduce((sum, e) => sum + parseFloat(e.promedio_final || 0), 0) / evalsFiltradas.length) : 0;
+        let promTotal = evalsFiltradas.length > 0 
+          ? (evalsFiltradas.reduce((sum, e) => sum + (parseFloat(e.promedio_final) || 0), 0) / evalsFiltradas.length) 
+          : 0;
         
         setKpis({
           activos: alumnosFiltrados.filter(a => a.estatus === 'En proceso').length,
@@ -111,15 +128,21 @@ export default function AdminDashboard() {
         // D) CÁLCULO DE TIEMPO DE RETRASO OPT
         let primerosViajes = {};
         viajes.forEach(v => { 
+          if (!v.hora_inicio || !v.id_alumno) return;
           let fechaV = new Date(v.hora_inicio);
+          // Validación para omitir fechas inválidas devueltas por la base de datos
+          if (isNaN(fechaV.getTime())) return;
+
           if (!primerosViajes[v.id_alumno] || fechaV < primerosViajes[v.id_alumno]) {
             primerosViajes[v.id_alumno] = fechaV;
           }
         });
 
+        const ahora = new Date();
         let retrasosCalculados = alumnosFiltrados.map(a => {
-          // Si no tiene fecha de creación por alguna razón, usamos la fecha de hoy para no romper la app
-          let fechaInduccion = new Date(a.created_at || new Date()); 
+          let fechaInduccion = a.created_at ? new Date(a.created_at) : ahora; 
+          if (isNaN(fechaInduccion.getTime())) fechaInduccion = ahora;
+
           let diasPerdidos = 0;
           let estadoViaje = '';
 
@@ -127,13 +150,13 @@ export default function AdminDashboard() {
             diasPerdidos = (primerosViajes[a.id] - fechaInduccion) / (1000 * 60 * 60 * 24);
             estadoViaje = 'Asignado';
           } else {
-            diasPerdidos = (new Date() - fechaInduccion) / (1000 * 60 * 60 * 24);
+            diasPerdidos = (ahora - fechaInduccion) / (1000 * 60 * 60 * 24);
             estadoViaje = 'Sin Práctica';
           }
 
           return {
             lider: a.lider || 'Sin Líder',
-            alumno: a.nombre_completo,
+            alumno: a.nombre_completo || 'Desconocido',
             diasPerdidos: Math.max(0, Math.round(diasPerdidos)),
             estado: estadoViaje
           };
@@ -168,8 +191,8 @@ export default function AdminDashboard() {
 
         const dataAgrupadaActual = agrupaciones[vistaAgrupacion] || {};
         const labelsDinamicos = Object.keys(dataAgrupadaActual).sort();
-        const dataKMDinamicos = labelsDinamicos.map(k => dataAgrupadaActual[k]?.km.toFixed(1) || 0);
-        const dataHorasDinamicos = labelsDinamicos.map(k => dataAgrupadaActual[k]?.horas.toFixed(1) || 0);
+        const dataKMDinamicos = labelsDinamicos.map(k => dataAgrupadaActual[k]?.km ? parseFloat(dataAgrupadaActual[k].km.toFixed(1)) : 0);
+        const dataHorasDinamicos = labelsDinamicos.map(k => dataAgrupadaActual[k]?.horas ? parseFloat(dataAgrupadaActual[k].horas.toFixed(1)) : 0);
 
         setChartData({
           progreso: { labels: ['0-500 KM', '500-1500 KM', '1.5k-4k KM', 'Meta +4k KM'], datasets: [{ label: 'Alumnos', data: prog, backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#10b981'], borderRadius: 4 }] },
@@ -192,7 +215,7 @@ export default function AdminDashboard() {
     };
 
     calcularDashboard();
-  }, [filtrosGlobales, vistaAgrupacion]); 
+  }, [desde, hasta, generacion, unidad, lider, gerente, vistaAgrupacion]); 
 
   // Estilos
   const cardStyle = { background: 'var(--card-bg)', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', border: '1px solid var(--border-color)' };
