@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { dataService } from '../../services/dataService';
+import { solicitarAnalisisDeRiesgo } from '../../services/aiService'; // Integración de la IA
 
 export default function Cardex() {
   const [evaluaciones, setEvaluaciones] = useState([]);
@@ -13,6 +14,10 @@ export default function Cardex() {
   const [formData, setFormData] = useState({
     id_alumno: '', id_tutor: '', promedio_final: '', semaforo: 'Verde', notas_texto: ''
   });
+
+  // Estados para el Análisis de IA
+  const [cargandoIA, setCargandoIA] = useState(false);
+  const [nivelRiesgo, setNivelRiesgo] = useState('');
 
   // 1. Cargar datos reales desde Supabase
   const cargarDatos = async () => {
@@ -40,7 +45,22 @@ export default function Cardex() {
     cargarDatos();
   }, []);
 
-  // 2. Funciones del Modal
+  // 2. Función de Análisis con Inteligencia Artificial
+  const handleAnalizarRiesgo = async (idPrueba, comentarioTutor) => {
+    setCargandoIA(true);
+    
+    // Ejecutamos la función importada usando los datos reales de la fila
+    const resultadoIA = await solicitarAnalisisDeRiesgo(idPrueba, comentarioTutor);
+    
+    if (resultadoIA) {
+      setNivelRiesgo(resultadoIA); // Guardamos el resultado
+      alert(`El análisis de IA ha determinado un riesgo: ${resultadoIA}`);
+    }
+    
+    setCargandoIA(false);
+  };
+
+  // 3. Funciones del Modal
   const handleChangeForm = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -119,6 +139,15 @@ export default function Cardex() {
         </div>
       </div>
 
+      {/* RESULTADO GLOBAL DE LA IA */}
+      {nivelRiesgo && (
+        <div style={{ background: 'rgba(14, 165, 233, 0.1)', border: '1px solid var(--primary)', padding: '15px', borderRadius: '10px', marginBottom: '20px' }}>
+          <p style={{ margin: 0, color: 'var(--text-light)' }}>
+            Último análisis de la Inteligencia Artificial: <strong>{nivelRiesgo}</strong>
+          </p>
+        </div>
+      )}
+
       {/* TABLA PRINCIPAL */}
       <div style={{ background: 'var(--card-bg)', borderRadius: '16px', border: '1px solid var(--border-color)', overflow: 'auto', boxShadow: '0 10px 20px rgba(0,0,0,0.3)', marginBottom: '30px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px', color: 'var(--text-light)' }}>
@@ -157,7 +186,17 @@ export default function Cardex() {
                     <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', maxWidth: '200px' }}>{e.notas_texto}</td>
                     <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}>
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        <button onClick={() => eliminarRegistro(e.id)} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--border-color)', color: '#f43f5e', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>🗑️ Borrar</button>
+                        {/* Botón de la Inteligencia Artificial */}
+                        <button 
+                          onClick={() => handleAnalizarRiesgo(e.id, e.notas_texto)} 
+                          disabled={cargandoIA}
+                          style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', borderRadius: '6px', cursor: cargandoIA ? 'not-allowed' : 'pointer', fontSize: '12px', fontWeight: 700 }}
+                        >
+                          🤖 IA
+                        </button>
+                        <button onClick={() => eliminarRegistro(e.id)} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--border-color)', color: '#f43f5e', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>
+                          🗑️
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -217,45 +256,6 @@ export default function Cardex() {
         </div>
       )}
 
-    </div>
-  );
-}
-import React, { useState } from 'react';
-// 1. Importamos la función que creamos en el Paso 1
-import { solicitarAnalisisDeRiesgo } from '../../services/aiService'; 
-
-export default function Cardex() {
-  const [cargando, setCargando] = useState(false);
-  const [nivelRiesgo, setNivelRiesgo] = useState('');
-
-  // 2. Creamos la función que manejará el clic del botón
-  const handleAnalizarRiesgo = async () => {
-    setCargando(true);
-    
-    // Aquí pones el ID real de la evaluación y el comentario que vas a analizar
-    const idPrueba = "123"; 
-    const comentarioTutor = "El alumno maneja a exceso de velocidad en curvas.";
-
-    // 3. Ejecutamos la función importada
-    const resultadoIA = await solicitarAnalisisDeRiesgo(idPrueba, comentarioTutor);
-    
-    if (resultadoIA) {
-      setNivelRiesgo(resultadoIA); // Guardamos el resultado (BAJO, MEDIO, ALTO)
-    }
-    
-    setCargando(false);
-  };
-
-  return (
-    <div>
-      <h2>Análisis de Riesgo con IA</h2>
-      
-      {/* 4. Conectamos la función al evento onClick del botón */}
-      <button onClick={handleAnalizarRiesgo} disabled={cargando}>
-        {cargando ? 'Analizando...' : 'Analizar Riesgo'}
-      </button>
-
-      {nivelRiesgo && <p>El riesgo de este alumno es: <strong>{nivelRiesgo}</strong></p>}
     </div>
   );
 }
