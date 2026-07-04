@@ -220,3 +220,42 @@ export default function Cardex() {
     </div>
   );
 }
+import React, { useState } from 'react';
+// 1. Importamos la función que creamos en el Paso 1
+import { solicitarAnalisisDeRiesgo } from '../../services/aiService'; 
+
+export default function Cardex() {
+  const [cargando, setCargando] = useState(false);
+  const [nivelRiesgo, setNivelRiesgo] = useState('');
+
+  // 2. Creamos la función que manejará el clic del botón
+  const handleAnalizarRiesgo = async () => {
+    setCargando(true);
+    
+    // Aquí pones el ID real de la evaluación y el comentario que vas a analizar
+    const idPrueba = "123"; 
+    const comentarioTutor = "El alumno maneja a exceso de velocidad en curvas.";
+
+    // 3. Ejecutamos la función importada
+    const resultadoIA = await solicitarAnalisisDeRiesgo(idPrueba, comentarioTutor);
+    
+    if (resultadoIA) {
+      setNivelRiesgo(resultadoIA); // Guardamos el resultado (BAJO, MEDIO, ALTO)
+    }
+    
+    setCargando(false);
+  };
+
+  return (
+    <div>
+      <h2>Análisis de Riesgo con IA</h2>
+      
+      {/* 4. Conectamos la función al evento onClick del botón */}
+      <button onClick={handleAnalizarRiesgo} disabled={cargando}>
+        {cargando ? 'Analizando...' : 'Analizar Riesgo'}
+      </button>
+
+      {nivelRiesgo && <p>El riesgo de este alumno es: <strong>{nivelRiesgo}</strong></p>}
+    </div>
+  );
+}
