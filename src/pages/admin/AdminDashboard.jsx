@@ -1,326 +1,500 @@
-import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
-// IMPORTANTE: Respetamos la "C" mayúscula de supabaseClient que vimos en tus carpetas
+import React, { useState, useMemo, useEffect } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart, Line } from 'recharts';
+import { Database, Upload, ShieldAlert, Users, Truck, Activity, UserPlus, Clock, BookOpen, BarChart3, AlertCircle } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 
-import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement
-} from 'chart.js';
-import { Bar, Doughnut } from 'react-chartjs-2';
-
-// Configuración global de Chart.js
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
-ChartJS.defaults.color = '#94a3b8';
-ChartJS.defaults.font.family = "'Plus Jakarta Sans', sans-serif";
-
 export default function AdminDashboard() {
-  const { filtrosGlobales } = useOutletContext();
-
-  const [kpis, setKpis] = useState({ activos: 0, liberados: 0, km: 0, horas: 0, promedio: 0, riesgo: 0 });
-  const [aiInsights, setAiInsights] = useState([]);
-  const [chartData, setChartData] = useState({ progreso: null, semaforos: null, kmtAgrupados: null });
-  const [retrasosLideres, setRetrasosLideres] = useState([]);
+  const [dbStatus, setDbStatus] = useState('Conectando a Red LARMEX...');
+  const [dbColor, setDbColor] = useState('#f59e0b');
   const [cargando, setCargando] = useState(true);
-  const [errorCritico, setErrorCritico] = useState(null); 
-  
-  const [vistaAgrupacion, setVistaAgrupacion] = useState('generacion'); 
+  const [subiendo, setSubiendo] = useState(false);
 
-  // Desestructuramos los filtros para usarlos como dependencias primitivas en el useEffect
-  // Esto evita que la aplicación entre en un bucle infinito si el contexto recrea el objeto en cada render.
-  const { desde, hasta, generacion, unidad, lider, gerente } = filtrosGlobales || {};
+  // Pestaña Activa de la Torre de Control
+  const [pestañaActiva, setPestañaActiva] = useState('general'); // 'general', 'metas', 'altas', 'induccion', 'biblioteca'
+
+  // Estados de Datos de Supabase
+  const [usuarios, setUsuarios] = useState([]);
+  const [viajes, setViajes] = useState([]);
+  const [encuestas360, setEncuestas360] = useState([]);
+  const [registrosInduccion, setRegistrosInduccion] = useState([]);
+
+  // Filtros Globales
+  const [filtroUN, setFiltroUN] = useState('ALL');
+  const [filtroGeneracion, setFiltroGeneracion] = useState('ALL');
+  const [filtroGerente, setFiltroGerente] = useState('ALL');
+
+  // Formularios de Altas Corporativas (NUEVO)
+  const [tipoAlta, setTipoAlta] = useState('Alumno'); // Alumno, Lider, Gerente, Staff, UN
+  const [formAlumno, setFormAlumno] = useState({ matricula: '', nombre_completo: '', celular: '', generacion: '', fecha_entrega_empresa: '' });
+  const [formPersonal, setFormPersonal] = useState({ nombre_completo: '', rol: 'Lider', unidad_negocio: '' });
+  const [formUN, setFormUN] = useState({ nombre_unidad: '' });
+
+  // Formulario de Biblioteca (Se mantiene intacto)
+  const [tituloMaterial, setTituloMaterial] = useState('');
+  const [descMaterial, setDescMaterial] = useState('');
+  const [urlMaterial, setUrlMaterial] = useState('');
+  const [dirigidoA, setDirigidoA] = useState('Alumno');
+
+  // Carga de datos de infraestructura LARMEX
+  const extraerInformacionSupabase = async () => {
+    setCargando(true);
+    try {
+      const [resU, resV, resC, resI] = await Promise.all([
+        supabase.from('usuarios').select('*'),
+        supabase.from('viajes_diarios').select('*'),
+        supabase.from('encuestas').select('*'),
+        supabase.from('registros_induccion').select('*')
+      ]);
+
+      if (!resU.error) setUsuarios(resU.data || []);
+      if (!resV.error) setViajes(resV.data || []);
+      if (!resC.error) setEncuestas360(resC.data || []);
+      if (!resI.error) setRegistrosInduccion(resI.data || []);
+
+      setDbStatus('Online - Servidores Sincronizados');
+      setDbColor('#10b981');
+    } catch (err) {
+      setDbStatus('Error en Infraestructura LARMEX');
+      setDbColor('#ef4444');
+    } finally {
+      setCargando(false);
+    }
+  };
 
   useEffect(() => {
-    const calcularDashboard = async () => {
-      setCargando(true);
-      setErrorCritico(null);
-      
-      try {
-        // A) TRAEMOS LA DATA DE SUPABASE
-        const [resU, resV, resE] = await Promise.all([
-          supabase.from('usuarios').select('id, nombre_completo, rol, estatus, generacion, unidad_negocio, lider, gerente, created_at'),
-          supabase.from('viajes_diarios').select('id_alumno, km_recorridos, tiempo_total_minutos, hora_inicio'),
-          supabase.from('evaluaciones_cardex').select('id_alumno, promedio_final, semaforo, fecha_evaluacion, id_tutor')
-        ]);
+    extraerInformacionSupabase();
+  }, []);
 
-        if (resU.error) throw resU.error;
-        if (resV.error) throw resV.error;
-        if (resE.error) throw resE.error;
-
-        const usuarios = resU.data || [];
-        const viajes = resV.data || [];
-        const evaluaciones = resE.data || [];
-
-        // B) APLICAMOS FILTROS DE FECHAS Y GLOBALES
-        const fi = desde ? new Date(desde + 'T00:00:00') : new Date('2000-01-01');
-        const ff = hasta ? new Date(hasta + 'T23:59:59') : new Date('2100-01-01');
-
-        const alumnosFiltrados = usuarios.filter(u => {
-          if (u.rol !== 'Alumno') return false; 
-          let pasaGen = (generacion === 'TODOS' || u.generacion === generacion);
-          let pasaUni = (unidad === 'TODOS' || u.unidad_negocio === unidad);
-          let pasaLid = (lider === 'TODOS' || u.lider === lider);
-          let pasaGer = (gerente === 'TODOS' || u.gerente === gerente);
-          return pasaGen && pasaUni && pasaLid && pasaGer;
-        });
-
-        const idsAlumnos = alumnosFiltrados.map(a => a.id);
-        
-        // Medida de seguridad: Validamos que las fechas de los viajes y evaluaciones sean correctas antes de comparar
-        const viajesFiltrados = viajes.filter(v => {
-          if (!v.hora_inicio || !idsAlumnos.includes(v.id_alumno)) return false;
-          const fechaV = new Date(v.hora_inicio);
-          return fechaV >= fi && fechaV <= ff;
-        });
-
-        const evalsFiltradas = evaluaciones.filter(e => {
-          if (!e.fecha_evaluacion || !idsAlumnos.includes(e.id_alumno)) return false;
-          const fechaE = new Date(e.fecha_evaluacion);
-          return fechaE >= fi && fechaE <= ff;
-        });
-
-        // C) CALCULAMOS KPIs SUPERIORES Y AGRUPACIONES DINÁMICAS
-        let kmTotales = 0;
-        let minTotales = 0;
-        
-        let agrupaciones = {
-          generacion: {}, unidad_negocio: {}, lider: {}, alumno: {}
-        };
-
-        const dicAlumnos = {};
-        alumnosFiltrados.forEach(a => { if (a?.id) dicAlumnos[a.id] = a; });
-
-        viajesFiltrados.forEach(v => {
-          let km = parseFloat(v.km_recorridos) || 0;
-          let mins = parseFloat(v.tiempo_total_minutos) || 0;
-          kmTotales += km;
-          minTotales += mins;
-
-          let al = dicAlumnos[v.id_alumno];
-          if (al) {
-            const dims = [
-              { tipo: 'generacion', valor: al.generacion || 'Sin Generación' },
-              { tipo: 'unidad_negocio', valor: al.unidad_negocio || 'Sin Unidad' },
-              { tipo: 'lider', valor: al.lider || 'Sin Líder' },
-              { tipo: 'alumno', valor: al.nombre_completo || 'Desconocido' }
-            ];
-
-            dims.forEach(d => {
-              if (!agrupaciones[d.tipo][d.valor]) agrupaciones[d.tipo][d.valor] = { km: 0, horas: 0 };
-              agrupaciones[d.tipo][d.valor].km += km;
-              agrupaciones[d.tipo][d.valor].horas += (mins / 60);
-            });
-          }
-        });
-
-        let promTotal = evalsFiltradas.length > 0 
-          ? (evalsFiltradas.reduce((sum, e) => sum + (parseFloat(e.promedio_final) || 0), 0) / evalsFiltradas.length) 
-          : 0;
-        
-        setKpis({
-          activos: alumnosFiltrados.filter(a => a.estatus === 'En proceso').length,
-          liberados: alumnosFiltrados.filter(a => a.estatus === 'Liberado').length,
-          km: kmTotales.toLocaleString('en-US', { maximumFractionDigits: 1 }),
-          horas: (minTotales / 60).toLocaleString('en-US', { maximumFractionDigits: 1 }),
-          promedio: promTotal.toFixed(1),
-          riesgo: evalsFiltradas.filter(e => e.semaforo === 'Rojo').length
-        });
-
-        // D) CÁLCULO DE TIEMPO DE RETRASO OPT
-        let primerosViajes = {};
-        viajes.forEach(v => { 
-          if (!v.hora_inicio || !v.id_alumno) return;
-          let fechaV = new Date(v.hora_inicio);
-          // Validación para omitir fechas inválidas devueltas por la base de datos
-          if (isNaN(fechaV.getTime())) return;
-
-          if (!primerosViajes[v.id_alumno] || fechaV < primerosViajes[v.id_alumno]) {
-            primerosViajes[v.id_alumno] = fechaV;
-          }
-        });
-
-        const ahora = new Date();
-        let retrasosCalculados = alumnosFiltrados.map(a => {
-          let fechaInduccion = a.created_at ? new Date(a.created_at) : ahora; 
-          if (isNaN(fechaInduccion.getTime())) fechaInduccion = ahora;
-
-          let diasPerdidos = 0;
-          let estadoViaje = '';
-
-          if (primerosViajes[a.id]) {
-            diasPerdidos = (primerosViajes[a.id] - fechaInduccion) / (1000 * 60 * 60 * 24);
-            estadoViaje = 'Asignado';
-          } else {
-            diasPerdidos = (ahora - fechaInduccion) / (1000 * 60 * 60 * 24);
-            estadoViaje = 'Sin Práctica';
-          }
-
-          return {
-            lider: a.lider || 'Sin Líder',
-            alumno: a.nombre_completo || 'Desconocido',
-            diasPerdidos: Math.max(0, Math.round(diasPerdidos)),
-            estado: estadoViaje
-          };
-        }).sort((a, b) => b.diasPerdidos - a.diasPerdidos); 
-
-        setRetrasosLideres(retrasosCalculados);
-
-        // E) IA E INSIGHTS
-        let alertasIA = [];
-        retrasosCalculados.filter(r => r.diasPerdidos > 7 && r.estado === 'Sin Práctica').slice(0, 2).forEach(r => {
-          alertasIA.push({ tipo: 'rojo', color: '#fda4af', texto: `🚨 Retraso Crítico: El líder ${r.lider} tiene a ${r.alumno} estancado sin práctica por ${r.diasPerdidos} días.` });
-        });
-
-        for (const [id, stats] of Object.entries(agrupaciones.alumno)) {
-          if (stats.km >= 4000) {
-            alertasIA.push({ tipo: 'verde', color: '#6ee7b7', texto: `🏆 Meta Alcanzada: ${id} superó los 4,000 KM. Listo para evaluación final.` });
-          }
+  // ==========================================
+  // MANEJADORES DE ALTAS (NUEVA SECCIÓN REQUERIDA)
+  // ==========================================
+  const ejecutarAltaCorporativa = async (e) => {
+    e.preventDefault();
+    setSubiendo(true);
+    try {
+      let payload = {};
+      if (tipoAlta === 'Alumno') {
+        if (!formAlumno.matricula || !formAlumno.nombre_completo || !formAlumno.celular || !formAlumno.generacion || !formAlumno.fecha_entrega_empresa) {
+          setSubiendo(false);
+          return alert("⚠️ Todos los campos del alumno (Matrícula, Celular, Nombre, Generación y Fecha de Entrega) son obligatorios.");
         }
-        setAiInsights(alertasIA.slice(0, 4));
-
-        // F) GRÁFICAS DINÁMICAS
-        let prog = [0, 0, 0, 0];
-        Object.values(agrupaciones.alumno).forEach(stats => {
-          if (stats.km <= 500) prog[0]++;
-          else if (stats.km <= 1500) prog[1]++;
-          else if (stats.km < 4000) prog[2]++;
-          else prog[3]++;
-        });
-
-        let sem = { Rojo: 0, Amarillo: 0, Verde: 0 };
-        evalsFiltradas.forEach(e => { if(sem[e.semaforo] !== undefined) sem[e.semaforo]++ });
-
-        const dataAgrupadaActual = agrupaciones[vistaAgrupacion] || {};
-        const labelsDinamicos = Object.keys(dataAgrupadaActual).sort();
-        const dataKMDinamicos = labelsDinamicos.map(k => dataAgrupadaActual[k]?.km ? parseFloat(dataAgrupadaActual[k].km.toFixed(1)) : 0);
-        const dataHorasDinamicos = labelsDinamicos.map(k => dataAgrupadaActual[k]?.horas ? parseFloat(dataAgrupadaActual[k].horas.toFixed(1)) : 0);
-
-        setChartData({
-          progreso: { labels: ['0-500 KM', '500-1500 KM', '1.5k-4k KM', 'Meta +4k KM'], datasets: [{ label: 'Alumnos', data: prog, backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#10b981'], borderRadius: 4 }] },
-          semaforos: { labels: ['Rojo', 'Amarillo', 'Verde'], datasets: [{ data: [sem.Rojo, sem.Amarillo, sem.Verde], backgroundColor: ['#f43f5e', '#f59e0b', '#10b981'], borderWidth: 0 }] },
-          kmtAgrupados: {
-            labels: labelsDinamicos,
-            datasets: [
-              { label: 'Kilómetros', data: dataKMDinamicos, backgroundColor: '#0ea5e9', borderRadius: 4 },
-              { label: 'Horas Prácticas', data: dataHorasDinamicos, backgroundColor: '#8b5cf6', borderRadius: 4 }
-            ]
-          }
-        });
-
-      } catch (error) {
-        console.error("Error al procesar el dashboard:", error);
-        setErrorCritico("No se pudo conectar con la base de datos. Verifica tu conexión a internet o los permisos de Supabase.");
-      } finally {
-        setCargando(false);
+        payload = {
+          numero_empleado: formAlumno.matricula,
+          nombre_completo: formAlumno.nombre_completo,
+          telefono: formAlumno.celular,
+          generacion: formAlumno.generacion,
+          created_at: new Date(formAlumno.fecha_entrega_empresa).toISOString(), // Fecha de entrega a empresa
+          rol: 'Alumno',
+          etapa_actual: 'Prueba Intermedia', // Inicia siempre en Prueba Intermedia
+          estatus: 'En proceso'
+        };
+      } else if (tipoAlta === 'UN') {
+        if (!formUN.nombre_unidad) { setSubiendo(false); return alert("Ingresa el nombre de la unidad."); }
+        payload = { nombre: formUN.nombre_unidad, tipo: 'Unidad' };
+      } else {
+        if (!formPersonal.nombre_completo) { setSubiendo(false); return alert("Ingresa el nombre completo."); }
+        payload = { nombre_completo: formPersonal.nombre_completo, rol: formPersonal.rol, unidad_negocio: formPersonal.unidad_negocio };
       }
+
+      // Inserción en la tabla correspondiente de Supabase
+      const tablaDestino = tipoAlta === 'UN' ? 'catalogos_unidades' : 'usuarios';
+      const { error } = await supabase.from(tablaDestino).insert([payload]);
+
+      if (!error) {
+        alert(`✓ Alta de ${tipoAlta} registrada exitosamente en el sistema.`);
+        setFormAlumno({ matricula: '', nombre_completo: '', celular: '', generacion: '', fecha_entrega_empresa: '' });
+        setFormPersonal({ nombre_completo: '', rol: 'Lider', unidad_negocio: '' });
+        setFormUN({ nombre_unidad: '' });
+        extraerInformacionSupabase(); // Recargar datos
+      } else {
+        alert("Error en inserción: " + error.message);
+      }
+    } catch (err) {
+      alert("Error en el servidor: " + err.message);
+    } finally {
+      setSubiendo(false);
+    }
+  };
+
+  const publicarMaterialEstudio = async (e) => {
+    e.preventDefault();
+    if (!tituloMaterial || !urlMaterial) return alert("Campos obligatorios vacíos.");
+    const payload = { titulo: tituloMaterial, descripcion: descMaterial, url_documento_video: urlMaterial, dirigido_a: dirigidoA, semana_asignada: 1, created_at: new Date().toISOString() };
+    const { error } = await supabase.from('material_estudio').insert([payload]);
+    if (!error) { alert("✓ Material publicado exitosamente."); setTituloMaterial(''); setDescMaterial(''); setUrlMaterial(''); }
+  };
+
+  // ==========================================
+  // MOTOR DE CÁLCULO LOGÍSTICO Y TIEMPOS MUERTOS
+  // ==========================================
+  const analiticaProcesada = useMemo(() => {
+    let kmGlobales = 0;
+    let alertasIA = [];
+    let comparativoUN = {};
+    let comparativoGerentes = {};
+
+    const alumnosModificados = usuarios.filter(u => u.rol === 'Alumno').map(alumno => {
+      const misViajes = viajes.filter(v => v.id_alumno === alumno.id);
+      const misQuejas = encuestas360.filter(q => q.id_alumno === alumno.id && q.calificacion_general <= 2);
+      
+      const kmTotales = misViajes.reduce((sum, v) => sum + (v.km_recorridos || 0), 0);
+      const minsTotales = misViajes.reduce((sum, v) => sum + (v.tiempo_total_minutos || 0), 0);
+      kmGlobales += kmTotales;
+
+      // Cálculo exacto de días sin OPT asignado (se refleja en Líder y Gerente)
+      let diasSinOPT = 0;
+      if (!alumno.lider || !alumno.gerente || !alumno.tutor_opt) {
+        const inicio = alumno.created_at ? new Date(alumno.created_at) : new Date();
+        diasSinOPT = Math.max(0, Math.floor((new Date().getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
+      }
+
+      // Cálculo de días sin registros / sin manejar
+      let diasSinManejar = 0;
+      if (misViajes.length > 0) {
+        // Encontrar la fecha del último viaje diario
+        const fechas = misViajes.map(v => new Date(v.hora_inicio || v.fecha_hora || Date.now()).getTime());
+        const ultimoViaje = Math.max(...fechas);
+        diasSinManejar = Math.max(0, Math.floor((new Date().getTime() - ultimoViaje) / (1000 * 60 * 60 * 24)));
+      } else if (alumno.etapa_actual === 'OPT') {
+        const inicioOPT = alumno.fecha_inicio_opt ? new Date(alumno.fecha_inicio_opt) : new Date();
+        diasSinManejar = Math.max(0, Math.floor((new Date().getTime() - inicioOPT.getTime()) / (1000 * 60 * 60 * 24)));
+      }
+
+      // Algoritmo Ponderado de Semáforo de Riesgo
+      let riesgoBaja = 0;
+      if (diasSinManejar > 5) riesgoBaja += 40;
+      if (diasSinOPT > 4) riesgoBaja += 30;
+      if (misQuejas.length > 0) riesgoBaja += 30;
+
+      if (riesgoBaja >= 60) {
+        alertasIA.push({
+          id: alumno.id,
+          texto: `⚠️ Riesgo Crítico (${riesgoBaja}%): ${alumno.nombre_completo} acumula ${diasSinManejar} días sin registros y ${diasSinOPT} días sin OPT.`
+        });
+      }
+
+      // Acumular datos para gráficas por Unidad de Negocio
+      const unName = alumno.unidad_negocio || "No Asignada";
+      if (!comparativoUN[unName]) comparativoUN[unName] = { name: unName, kmReal: 0, metaKm: 0 };
+      comparativoUN[unName].kmReal += kmTotales;
+      comparativoUN[unName].metaKm += 4000; // Meta estándar global de graduación
+
+      // Acumular datos para gráficas por Gerente
+      const gerName = alumno.gerente || "Sin Gerente";
+      if (!comparativoGerentes[gerName]) comparativoGerentes[gerName] = { name: gerName, kmReal: 0, metaKm: 0 };
+      comparativoGerentes[gerName].kmReal += kmTotales;
+      comparativoGerentes[gerName].metaKm += 4000;
+
+      return {
+        ...alumno,
+        kmReal: kmTotales,
+        hrsReal: (minsTotales / 60).toFixed(1),
+        diasSinOPT,
+        diasSinManejar,
+        riesgo: riesgoBaja
+      };
+    });
+
+    // Filtrar la lista final según los selectores superiores
+    const listaFiltrada = alumnosModificados.filter(a => {
+      const unMatch = filtroUN === 'ALL' || a.unidad_negocio === filtroUN;
+      const genMatch = filtroGeneracion === 'ALL' || a.generacion === filtroGeneracion;
+      const gerMatch = filtroGerente === 'ALL' || a.gerente === filtroGerente;
+      return unMatch && genMatch && gerMatch;
+    });
+
+    return { 
+      listaFiltrada, 
+      kmGlobales, 
+      alertasIA, 
+      chartUN: Object.values(comparativoUN), 
+      chartGerentes: Object.values(comparativoGerentes) 
     };
+  }, [usuarios, viajes, encuestas360, filtroUN, filtroGeneracion, filtroGerente]);
 
-    calcularDashboard();
-  }, [desde, hasta, generacion, unidad, lider, gerente, vistaAgrupacion]); 
-
-  // Estilos
-  const cardStyle = { background: 'var(--card-bg)', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', border: '1px solid var(--border-color)' };
-  const chartBoxStyle = { ...cardStyle, height: '350px', display: 'flex', flexDirection: 'column' };
-  const btnStyle = (activa) => ({ padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', border: 'none', background: activa ? 'var(--primary)' : 'rgba(255,255,255,0.1)', color: activa ? '#fff' : '#aaa', fontWeight: 'bold', transition: 'all 0.3s' });
-
-  if (errorCritico) return <div style={{color: '#fca5a5', textAlign: 'center', marginTop: '50px', padding: '20px', border: '1px solid #fca5a5', borderRadius: '8px'}}><h3>⚠️ Error Crítico</h3><p>{errorCritico}</p></div>;
-  if (cargando) return <h2 style={{color: 'var(--primary)', textAlign: 'center', marginTop: '50px'}}>Procesando Métricas Dinámicas...</h2>;
+  if (cargando) return <h2 style={{ color: '#0f172a', textAlign: 'center', marginTop: '100px' }}>Desplegando Torre de Control Corporativa...</h2>;
 
   return (
-    <div style={{ animation: 'fadeIn 0.4s ease', paddingBottom: '40px' }}>
+    <div style={{ padding: '25px', backgroundColor: '#f8fafc', minHeight: '100vh', fontFamily: 'system-ui, sans-serif', color: '#1e293b' }}>
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
-        <h1 style={{ color: 'var(--text-light)', margin: 0, fontSize: '28px', fontWeight: 800 }}>Dashboard Directivo</h1>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px', marginBottom: '30px' }}>
-        <div style={{ ...cardStyle, borderTop: '4px solid var(--info)' }}>
-          <h3 style={{ margin: '0 0 5px 0', fontSize: '12px', textTransform: 'uppercase' }}>Alumnos Activos</h3>
-          <p style={{ margin: 0, fontSize: '30px', fontWeight: 800 }}>{kpis.activos}</p>
+      {/* CONTROL DE RED SUPERIOR */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', borderBottom: '2px solid #e2e8f0', paddingBottom: '15px' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '26px', fontWeight: 900, color: '#0f172a' }}>📈 LARMEX Control Tower & Ecosistema OPT</h1>
+          <p style={{ margin: '5px 0 0 0', color: '#64748b' }}>Auditoría completa de inducción teórica, alertas de inactividad por líder y altas del personal.</p>
         </div>
-        <div style={{ ...cardStyle, borderTop: '4px solid var(--purple)' }}>
-          <h3 style={{ margin: '0 0 5px 0', fontSize: '12px', textTransform: 'uppercase' }}>KM Totales</h3>
-          <p style={{ margin: 0, fontSize: '30px', fontWeight: 800 }}>{kpis.km}</p>
-        </div>
-        <div style={{ ...cardStyle, borderTop: '4px solid #f472b6' }}>
-          <h3 style={{ margin: '0 0 5px 0', fontSize: '12px', textTransform: 'uppercase' }}>Horas Prácticas</h3>
-          <p style={{ margin: 0, fontSize: '30px', fontWeight: 800 }}>{kpis.horas} h</p>
-        </div>
-        <div style={{ ...cardStyle, borderTop: '4px solid var(--warning)' }}>
-          <h3 style={{ margin: '0 0 5px 0', fontSize: '12px', textTransform: 'uppercase' }}>Promedio Global</h3>
-          <p style={{ margin: 0, fontSize: '30px', fontWeight: 800 }}>{kpis.promedio}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fff', padding: '10px', borderRadius: '8px', border: `1px solid ${dbColor}50` }}>
+          <Database size={16} color={dbColor} />
+          <span style={{ fontSize: '12px', fontWeight: 'bold', color: dbColor }}>{dbStatus}</span>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-        
-        <div style={{ ...cardStyle, border: '1px solid var(--primary-glow)', background: 'linear-gradient(135deg, rgba(217, 119, 6, 0.05) 0%, rgba(0,0,0,0.3) 100%)' }}>
-          <h3 style={{ marginTop: 0, color: 'var(--primary)', fontWeight: 800, fontSize: '18px' }}>🧠 Alertas de Flota e Inactividad</h3>
-          {aiInsights.length === 0 ? <p>Todo en orden.</p> : aiInsights.map((insight, idx) => (
-            <div key={idx} style={{ background: 'rgba(0,0,0,0.3)', padding: '12px', borderLeft: `4px solid ${insight.color}`, marginBottom: '8px', borderRadius: '6px', fontSize: '13px', color: insight.color }}>
-              {insight.texto}
+      {/* MENÚ DE SECCIONES (TABS DE ADMINISTRACIÓN) */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '25px' }}>
+        <button onClick={() => setPestañaActiva('general')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'general' ? '#0f172a' : '#fff', color: pestañaActiva === 'general' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}><BarChart3 size={16} style={{marginRight: '5px', inlineSize: 'auto'}}/> Vista General Directiva</button>
+        <button onClick={() => setPestañaActiva('metas')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'metas' ? '#0f172a' : '#fff', color: pestañaActiva === 'metas' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>🏆 Avances vs Metas</button>
+        <button onClick={() => setPestañaActiva('altas')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'altas' ? '#0f172a' : '#fff', color: pestañaActiva === 'altas' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}><UserPlus size={16}/> Configuración e Ingresos</button>
+        <button onClick={() => setPestañaActiva('induccion')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'induccion' ? '#0f172a' : '#fff', color: pestañaActiva === 'induccion' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}><BookOpen size={16}/> Auditoría Semana Inducción</button>
+        <button onClick={() => setPestañaActiva('biblioteca')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'biblioteca' ? '#0f172a' : '#fff', color: pestañaActiva === 'biblioteca' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}><Upload size={16}/> Biblioteca PPT</button>
+      </div>
+
+      {/* FILTROS GLOBALES DE SEGMENTACIÓN */}
+      <div style={{ display: 'flex', gap: '15px', background: '#fff', padding: '15px', borderRadius: '12px', marginBottom: '25px', border: '1px solid #e2e8f0' }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}><MapPin size={12}/> Unidad de Negocio:</label>
+          <select value={filtroUN} onChange={e => setFiltroUN(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', marginTop: '4px', border: '1px solid #cbd5e1' }}>
+            <option value="ALL">Todas las Unidades</option><option value="Monterrey">Monterrey</option><option value="Nuevo Laredo">Nuevo Laredo</option>
+          </select>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}><Users size={12}/> Generación:</label>
+          <select value={filtroGeneracion} onChange={e => setFiltroGeneracion(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', marginTop: '4px', border: '1px solid #cbd5e1' }}>
+            <option value="ALL">Todas</option><option value="Gen 24-A">Gen 24-A</option><option value="Gen 24-B">Gen 24-B</option>
+          </select>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}><Target size={12}/> Gerente de Zona:</label>
+          <select value={filtroGerente} onChange={e => setFiltroGerente(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', marginTop: '4px', border: '1px solid #cbd5e1' }}>
+            <option value="ALL">Todos los Gerentes</option><option value="Gerente Monterrey">Gerente Monterrey</option><option value="Gerente Laredo">Gerente Laredo</option>
+          </select>
+        </div>
+      </div>
+
+      {/* ==========================================
+          PESTAÑA 1: VISTA GENERAL DIRECTIVA
+      ========================================== */}
+      {pestañaActiva === 'general' && (
+        <div>
+          {/* Alertas Críticas de Baja */}
+          <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', padding: '20px', borderRadius: '12px', marginBottom: '25px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#e11d48', marginBottom: '15px' }}>
+              <ShieldAlert size={20} />
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>🧠 Semáforo e Alertas de Baja por Inactividad Logística</h3>
             </div>
-          ))}
-        </div>
+            {analiticaProcesada.alertasIA.length === 0 ? <p style={{fontSize: '14px', color: '#15803d'}}>✓ Indicadores óptimos: No hay riesgos latentes detectados hoy.</p> : analiticaProcesada.alertasIA.map((al, i) => (
+              <div key={i} style={{ padding: '10px', background: '#fff', borderLeft: '4px solid #ef4444', borderRadius: '6px', marginBottom: '6px', fontSize: '13px', color: '#991b1b' }}>{al.texto}</div>
+            ))}
+          </div>
 
-        <div style={{ ...cardStyle, overflowY: 'auto', maxHeight: '300px' }}>
-          <h3 style={{ marginTop: 0, color: '#f8fafc', fontWeight: 800, fontSize: '16px' }}>⏱️ Retraso de Asignación por Líder (Días sin práctica)</h3>
-          <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #333' }}>
-                <th style={{ padding: '8px' }}>Líder</th>
-                <th style={{ padding: '8px' }}>Alumno</th>
-                <th style={{ padding: '8px' }}>Estatus</th>
-                <th style={{ padding: '8px' }}>Días Perdidos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {retrasosLideres.slice(0, 10).map((r, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #222', color: r.diasPerdidos > 10 ? '#fca5a5' : '#e2e8f0' }}>
-                  <td style={{ padding: '8px' }}>{r.lider}</td>
-                  <td style={{ padding: '8px' }}>{r.alumno}</td>
-                  <td style={{ padding: '8px' }}>{r.estado}</td>
-                  <td style={{ padding: '8px', fontWeight: 'bold' }}>{r.diasPerdidos} días</td>
+          {/* Gráficas de Comparativas por Gerente y Unidad */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
+            <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <h4 style={{ margin: '0 0 15px 0', fontSize: '14px' }}>🏢 Desempeño Acumulado por Unidad de Negocio</h4>
+              <div style={{ width: '100%', height: '220px' }}>
+                <ResponsiveContainer>
+                  <BarChart data={analiticaProcesada.chartUN}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="kmReal" name="KM Reales" fill="#0284c7" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="metaKm" name="Meta Exigida" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <h4 style={{ margin: '0 0 15px 0', fontSize: '14px' }}>👨‍💼 Liderazgo y Cumplimiento por Gerente de Operación</h4>
+              <div style={{ width: '100%', height: '220px' }}>
+                <ResponsiveContainer>
+                  <BarChart data={analiticaProcesada.chartGerentes}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="kmReal" name="KM Reales" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="metaKm" name="Meta Exigida" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          PESTAÑA 2: AVANCES VS METAS (TABLA CON TIEMPOS MUERTOS)
+      ========================================== */}
+      {pestañaActiva === 'metas' && (
+        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          <div style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', fontWeight: 'bold' }}>Estatus de las 8 Semanas de Operación en Flota</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+              <thead style={{ backgroundColor: '#f8fafc', color: '#64748b' }}>
+                <tr>
+                  <th style={{ padding: '12px' }}>Operador Alumno</th>
+                  <th style={{ padding: '12px' }}>Unidad / Gerente</th>
+                  <th style={{ padding: '12px' }}>Etapa Actual</th>
+                  <th style={{ padding: '12px' }}>Progreso de Conducción</th>
+                  <th style={{ padding: '12px' }}>⚠️ Días sin OPT (Tutor)</th>
+                  <th style={{ padding: '12px' }}>⏳ Días sin Conducir</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <p style={{ fontSize: '11px', color: '#888', marginTop: '10px' }}>*Muestra los 10 alumnos con mayor retraso desde su inducción.</p>
-        </div>
-
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
-        
-        <div style={{ ...chartBoxStyle, gridColumn: '1 / -1' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <h3 style={{ margin: 0, fontSize: '15px', textTransform: 'uppercase' }}>Rendimiento: KM y Horas</h3>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={() => setVistaAgrupacion('generacion')} style={btnStyle(vistaAgrupacion === 'generacion')}>Por Generación</button>
-              <button onClick={() => setVistaAgrupacion('unidad_negocio')} style={btnStyle(vistaAgrupacion === 'unidad_negocio')}>Por Unidad</button>
-              <button onClick={() => setVistaAgrupacion('lider')} style={btnStyle(vistaAgrupacion === 'lider')}>Por Líder</button>
-              <button onClick={() => setVistaAgrupacion('alumno')} style={btnStyle(vistaAgrupacion === 'alumno')}>Por Alumno</button>
-            </div>
-          </div>
-          <div style={{ flexGrow: 1, position: 'relative' }}>
-            {chartData.kmtAgrupados && <Bar data={chartData.kmtAgrupados} options={{ responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,0.05)' } } } }} />}
-          </div>
-        </div>
-
-        <div style={chartBoxStyle}>
-          <h3 style={{ marginTop: 0, fontSize: '14px', textTransform: 'uppercase' }}>Avance vs Metas (4,000 KM)</h3>
-          <div style={{ flexGrow: 1, position: 'relative' }}>
-            {chartData.progreso && <Bar data={chartData.progreso} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,0.05)' } } } }} />}
+              </thead>
+              <tbody>
+                {analiticaProcesada.listaFiltrada.map(alumno => (
+                  <tr key={alumno.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '12px', fontWeight: 'bold' }}>{alumno.nombre_completo} <br/><span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 'normal' }}>Matrícula: {alumno.numero_empleado}</span></td>
+                    <td style={{ padding: '12px' }}>{alumno.unidad_negocio || "No Configurada"} <br/><span style={{ fontSize: '11px', color: '#64748b' }}>Gerente: {alumno.gerente || "N/A"}</span></td>
+                    <td style={{ padding: '12px' }}><span style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', background: alumno.etapa_actual === 'OPT' ? '#dcfce7' : '#fee2e2', color: alumno.etapa_actual === 'OPT' ? '#15803d' : '#ef4444' }}>{alumno.etapa_actual}</span></td>
+                    <td style={{ padding: '12px' }}><strong>{alumno.kmReal} km</strong> / {alumno.hrsReal} hrs</td>
+                    
+                    {/* Alerta de días acumulados sin asignación de OPT, impactando la métrica del Líder */}
+                    <td style={{ padding: '12px', color: alumno.diasSinOPT > 4 ? '#ef4444' : '#1e293b', fontWeight: alumno.diasSinOPT > 4 ? 'bold' : 'normal' }}>
+                      {alumno.diasSinOPT > 0 ? `${alumno.diasSinOPT} días perdidos` : '✓ OPT Asignado'}
+                    </td>
+                    
+                    {/* Alerta de días muertos sin manejar */}
+                    <td style={{ padding: '12px', color: alumno.diasSinManejar > 5 ? '#ef4444' : '#10b981', fontWeight: 'bold' }}>
+                      {alumno.diasSinManejar} días inactivo
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
+      )}
 
-        <div style={chartBoxStyle}>
-          <h3 style={{ marginTop: 0, fontSize: '14px', textTransform: 'uppercase' }}>Status Rúbricas (Semáforos)</h3>
-          <div style={{ flexGrow: 1, position: 'relative' }}>
-             {chartData.semaforos && <Doughnut data={chartData.semaforos} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#f8fafc' } } } }} />}
+      {/* ==========================================
+          PESTAÑA 3: MODULAR DE ALTAS (NUEVO REQUERIMIENTO)
+      ========================================== */}
+      {pestañaActiva === 'altas' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px' }}>
+          {/* Selector de tipo de registro corporativo */}
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <h4 style={{ marginTop: 0, marginBottom: '15px' }}>Estructura de Ingresos</h4>
+            {['Alumno', 'Lider', 'Gerente', 'Staff', 'UN'].map(tipo => (
+              <button key={tipo} onClick={() => setTipoAlta(tipo)} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', background: tipoAlta === tipo ? '#0f172a' : '#fff', color: tipoAlta === tipo ? '#fff' : '#1e293b', fontWeight: 'bold', marginBottom: '8px', textAlign: 'left', cursor: 'pointer' }}>
+                {tipo === 'Alumno' && '👨‍🎓 Ingresar Nuevo Alumno'}
+                {tipo === 'Lider' && '💼 Registrar Líder Operativo'}
+                {tipo === 'Gerente' && '👔 Registrar Gerente'}
+                {tipo === 'Staff' && '🛠️ Registrar Staff Administrativo'}
+                {tipo === 'UN' && '🏢 Crear Unidad de Negocio'}
+              </button>
+            ))}
+          </div>
+
+          {/* Formulario Dinámico Unificado */}
+          <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <h3>Formulario de Alta Oficial: {tipoAlta.toUpperCase()}</h3>
+            <form onSubmit={ejecutarAltaCorporativa} style={{ marginTop: '20px' }}>
+              
+              {tipoAlta === 'Alumno' && (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                    <div>
+                      <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Matrícula Empleado:</label>
+                      <input type="text" value={formAlumno.matricula} onChange={e => setFormAlumno({...formAlumno, matricula: e.target.value})} placeholder="Ej. LMX-9940" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Número de Celular:</label>
+                      <input type="text" value={formAlumno.celular} onChange={e => setFormAlumno({...formAlumno, celular: e.target.value})} placeholder="Ej. 8110223344" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px', boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '15px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nombre Completo del Operador:</label>
+                    <input type="text" value={formAlumno.nombre_completo} onChange={e => setFormAlumno({...formAlumno, nombre_completo: e.target.value})} placeholder="Nombre y Apellidos" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                    <div>
+                      <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Generación Asignada:</label>
+                      <input type="text" value={formAlumno.generacion} onChange={e => setFormAlumno({...formAlumno, generacion: e.target.value})} placeholder="Ej. Gen 24-B" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Fecha Entrega a Empresa:</label>
+                      <input type="date" value={formAlumno.fecha_entrega_empresa} onChange={e => setFormAlumno({...formAlumno, fecha_entrega_empresa: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px', boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {tipoAlta === 'UN' && (
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nombre Comercial de la Unidad:</label>
+                  <input type="text" value={formUN.nombre_unidad} onChange={e => setFormUN({nombre_unidad: e.target.value})} placeholder="Ej. Hub Nuevo Laredo" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px' }} />
+                </div>
+              )}
+
+              {(tipoAlta === 'Lider' || tipoAlta === 'Gerente' || tipoAlta === 'Staff') && (
+                <div>
+                  <div style={{ marginBottom: '15px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nombre Completo:</label>
+                    <input type="text" value={formPersonal.nombre_completo} onChange={e => setFormPersonal({...formPersonal, nombre_completo: e.target.value})} placeholder="Ej. Ing. Armando Casas" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px' }} />
+                  </div>
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Unidad de Negocio Adscrito:</label>
+                    <input type="text" value={formPersonal.unidad_negocio} onChange={e => setFormPersonal({...formPersonal, unidad_negocio: e.target.value})} placeholder="Ej. Monterrey" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px' }} />
+                  </div>
+                </div>
+              )}
+
+              <button type="submit" disabled={subiendo} style={{ width: '100%', padding: '12px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                {subiendo ? 'Registrando en Base Central...' : 'Confirmar Registro Oficial'}
+              </button>
+            </form>
           </div>
         </div>
+      )}
 
-      </div>
+      {/* ==========================================
+          PESTAÑA 4: AUDITORÍA DE LA SEMANA DE INDUCCIÓN
+      ========================================== */}
+      {pestañaActiva === 'induccion' && (
+        <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+          <h3>Control y Registro de Capacitación Teórica (Semana 1)</h3>
+          <p style={{ color: '#64748b', fontSize: '13px', marginTop: '-5px', marginBottom: '20px' }}>Datos recabados directamente de las notificaciones diarias completadas por los alumnos.</p>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+              <thead style={{ backgroundColor: '#f8fafc' }}>
+                <tr style={{ color: '#475569' }}>
+                  <th style={{ padding: '12px' }}>ID Alumno</th>
+                  <th style={{ padding: '12px' }}>Tema Recibido en Inducción</th>
+                  <th style={{ padding: '12px' }}>Duración Asignada</th>
+                  <th style={{ padding: '12px' }}>Fecha de Validación</th>
+                </tr>
+              </thead>
+              <tbody>
+                {registrosInduccion.length === 0 ? (
+                  <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>No hay registros de bitácoras teóricas de inducción completados en esta semana.</td></tr>
+                ) : registrosInduccion.map(reg => (
+                  <tr key={reg.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '12px', fontWeight: 'bold' }}>{reg.id_alumno}</td>
+                    <td style={{ padding: '12px' }}>{reg.tema_visto}</td>
+                    <td style={{ padding: '12px', color: '#4f46e5', fontWeight: 'bold' }}>{reg.duracion_minutos} minutos</td>
+                    <td style={{ padding: '12px' }}>{new Date(reg.fecha_registro).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          PESTAÑA 5: BIBLIOTECA (REPOSITORIO PPT)
+      ========================================== */}
+      {pestañaActiva === 'biblioteca' && (
+        <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', border: '1px solid #e2e8f0', maxWidth: '600px', margin: '0 auto' }}>
+          <h3 style={{marginTop: 0}}>Cargar Presentaciones Corporativas (PPT / PDF)</h3>
+          <form onSubmit={publicarMaterialEstudio} style={{ marginTop: '15px' }}>
+            <input type="text" value={tituloMaterial} onChange={e => setTituloMaterial(e.target.value)} placeholder="Título del archivo o manual..." style={{ width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+            <input type="text" value={descMaterial} onChange={e => setDescMaterial(e.target.value)} placeholder="Descripción breve..." style={{ width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+            <input type="url" value={urlMaterial} onChange={e => setUrlMaterial(e.target.value)} placeholder="URL del archivo en Drive o OneDrive..." style={{ width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+            
+            <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Destinatarios del Contenido:</label>
+            <select value={dirigidoA} onChange={e => setDirigidoA(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '20px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+              <option value="Alumno">Solo Alumnos (OPT)</option>
+              <option value="Tutor">Solo Tutores Certificados</option>
+              <option value="Ambos">Ambos Roles (Acceso General)</option>
+            </select>
+
+            <button type="submit" style={{ width: '100%', padding: '12px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Publicar Material en la Biblioteca</button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
