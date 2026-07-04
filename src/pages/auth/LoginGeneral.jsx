@@ -7,12 +7,14 @@ export default function LoginGeneral() {
   const [celular, setCelular] = useState('');
   const [pin, setPin] = useState('');
   const [autenticando, setAutenticando] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const ejecutarInicioSesion = async (e) => {
     e.preventDefault();
-    if (!celular || !pin) return alert("Ingresa tu número de celular y PIN.");
+    if (!celular || !pin) return setErrorMsg("Ingresa tu número de celular y PIN.");
     
     setAutenticando(true);
+    setErrorMsg('');
     try {
       const { data: usuarioBD, error } = await supabase
         .from('usuarios')
@@ -26,30 +28,56 @@ export default function LoginGeneral() {
       // Validamos que SÓLO los directivos ("General") puedan entrar aquí
       if (usuarioBD.rol === 'General') {
         localStorage.setItem('udat_app_session', JSON.stringify(usuarioBD));
-        navigate('/general'); // Redirige al dashboard corporativo
+        navigate('/general'); 
       } else {
-        alert("Acceso denegado. No tienes permisos de Alta Dirección.");
+        setErrorMsg("Acceso denegado. No tienes permisos de Alta Dirección.");
       }
     } catch (err) {
-      alert("Error: " + err.message);
+      setErrorMsg(err.message);
     } finally {
       setAutenticando(false);
     }
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a', fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ background: '#1e293b', padding: '40px 35px', borderRadius: '16px', width: '100%', maxWidth: '350px', border: '1px solid #334155', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', textAlign: 'center' }}>
-        <h2 style={{ color: '#f8fafc', margin: '0 0 10px 0', fontSize: '22px' }}>Alta Dirección</h2>
-        <p style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '25px' }}>Ingresa tus credenciales corporativas.</p>
+    <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a', fontFamily: 'system-ui, sans-serif', padding: '15px' }}>
+      <div style={{ background: '#1e293b', padding: '40px 35px', borderRadius: '20px', width: '100%', maxWidth: '350px', border: '1px solid #334155', boxShadow: '0 20px 40px rgba(0,0,0,0.6)', textAlign: 'center', boxSizing: 'border-box' }}>
         
+        <h2 style={{ color: '#4f46e5', margin: '0 0 5px 0', fontSize: '28px', fontWeight: 900 }}>Alta Dirección</h2>
+        <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '30px' }}>Credenciales corporativas (PIN)</p>
+        
+        {errorMsg && <p style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', margin: '0 0 20px 0' }}>{errorMsg}</p>}
+
         <form onSubmit={ejecutarInicioSesion}>
-          <input type="tel" value={celular} onChange={e => setCelular(e.target.value)} placeholder="Número Celular" style={{ width: '100%', padding: '12px', borderRadius: '8px', background: '#0f172a', color: '#fff', border: '1px solid #334155', marginBottom: '15px', boxSizing: 'border-box', outline: 'none' }} />
-          <input type="password" value={pin} onChange={e => setPin(e.target.value)} placeholder="PIN de Seguridad" style={{ width: '100%', padding: '12px', borderRadius: '8px', background: '#0f172a', color: '#fff', border: '1px solid #334155', marginBottom: '25px', boxSizing: 'border-box', outline: 'none' }} />
-          <button type="submit" disabled={autenticando} style={{ width: '100%', padding: '14px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}>
-            {autenticando ? 'Validando...' : 'Acceder al Tablero'}
+          <input 
+            type="tel" 
+            value={celular} 
+            onChange={e => setCelular(e.target.value)} 
+            placeholder="Número Celular" 
+            style={{ width: '100%', padding: '15px', borderRadius: '10px', background: '#0f172a', color: '#ffffff', border: '1px solid #475569', marginBottom: '20px', boxSizing: 'border-box', outline: 'none', fontSize: '16px' }} 
+          />
+          <input 
+            type="password" 
+            value={pin} 
+            onChange={e => setPin(e.target.value)} 
+            placeholder="PIN de Seguridad" 
+            style={{ width: '100%', padding: '15px', borderRadius: '10px', background: '#0f172a', color: '#ffffff', border: '1px solid #475569', marginBottom: '30px', boxSizing: 'border-box', outline: 'none', fontSize: '16px', letterSpacing: '2px' }} 
+          />
+          <button 
+            type="submit" 
+            disabled={autenticando} 
+            style={{ width: '100%', padding: '16px', background: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s', fontSize: '16px', boxShadow: autenticando ? 'none' : '0 4px 15px rgba(79, 70, 229, 0.4)', opacity: autenticando ? 0.7 : 1 }}
+          >
+            {autenticando ? 'Validando Identidad...' : 'Acceder al Tablero'}
           </button>
         </form>
+
+        <button 
+          onClick={() => navigate('/')}
+          style={{ width: '100%', padding: '15px', background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '10px', fontSize: '14px', marginTop: '15px', cursor: 'pointer' }}
+        >
+          Volver al Portal
+        </button>
       </div>
     </div>
   );

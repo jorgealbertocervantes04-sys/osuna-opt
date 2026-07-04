@@ -29,7 +29,6 @@ export default function LoginApp() {
 
     if (exito) {
       setUsuarioActual(datos);
-      // Si no tiene nombre registrado, lo mandamos a la sección de Alta
       if (!datos.nombre_completo || !datos.numero_empleado) {
         setPasoActual('registro');
       } else {
@@ -69,7 +68,6 @@ export default function LoginApp() {
     const { exito, mensaje } = await authService.activarCuenta(usuarioActual.id, payload);
 
     if (exito) {
-      // Actualizamos el usuario en memoria y pasamos a password
       setUsuarioActual({ ...usuarioActual, ...payload });
       setPasoActual('password');
       alert(`Tu cuenta ha sido activada.\nTu clave temporal es: ${pwdGenerada}`);
@@ -84,10 +82,7 @@ export default function LoginApp() {
     if (!password) return setErrorMsg("Ingresa tu contraseña.");
 
     if (password === usuarioActual.contrasena) {
-      // Guardamos la sesión local para el dashboard móvil
       localStorage.setItem('udat_app_session', JSON.stringify(usuarioActual));
-      
-      // Redirigir según el rol de Supabase
       if (usuarioActual.rol === 'Tutor') {
         navigate('/app/tutor');
       } else {
@@ -98,99 +93,82 @@ export default function LoginApp() {
     }
   };
 
-  // Manejador del formulario de registro
   const handleRegChange = (e) => setRegData({ ...regData, [e.target.name]: e.target.value });
 
-  // Estilos reutilizables
-  const inputStyle = { width: '100%', padding: '14px', marginBottom: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.3)', color: 'white', textAlign: 'center', fontSize: '16px', boxSizing: 'border-box' };
-  const btnStyle = { width: '100%', padding: '16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: cargando ? 'not-allowed' : 'pointer', boxShadow: cargando ? 'none' : '0 4px 15px var(--primary-glow)', opacity: cargando ? 0.7 : 1 };
+  // ESTILOS VISUALES OSCUROS DE ALTO CONTRASTE
+  const inputStyle = { width: '100%', padding: '14px', marginBottom: '20px', borderRadius: '10px', border: '1px solid #475569', background: '#0f172a', color: '#ffffff', textAlign: 'center', fontSize: '16px', boxSizing: 'border-box', outline: 'none' };
+  const btnStyle = { width: '100%', padding: '16px', background: '#0ea5e9', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: 800, cursor: cargando ? 'not-allowed' : 'pointer', boxShadow: cargando ? 'none' : '0 4px 15px rgba(14, 165, 233, 0.4)', opacity: cargando ? 0.7 : 1, transition: '0.3s' };
 
   return (
-    <div className="login-container" style={{ background: 'var(--card-bg)', padding: '40px 30px', borderRadius: '24px', boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)', width: '100%', maxWidth: '450px', boxSizing: 'border-box', border: '1px solid var(--border-color)', transition: 'all 0.5s ease', margin: '0 auto' }}>
-      
-      <div className="brand-header" style={{ marginBottom: '35px', textAlign: 'center' }}>
-        <h1 style={{ margin: 0, fontSize: '38px', fontWeight: 800, color: 'var(--primary)' }}>UDAT</h1>
-        <p style={{ color: 'var(--text-muted)', fontWeight: 600, margin: '5px 0 0 0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '3px' }}>Forma Tu Camino</p>
-      </div>
-
-      {errorMsg && <p style={{ color: '#fda4af', fontWeight: 'bold', fontSize: '13px', margin: '0 0 15px 0', textAlign: 'center' }}>{errorMsg}</p>}
-
-      {/* SECCIÓN 1: INGRESO CELULAR */}
-      {pasoActual === 'telefono' && (
-        <div style={{ textAlign: 'center' }}>
-          <h3 style={{ color: 'var(--text-light)', marginBottom: '8px', fontSize: '22px' }}>Acceso de Personal</h3>
-          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: 0, marginBottom: '25px' }}>Ingresa tu número celular registrado</p>
-          
-          <input 
-            type="tel" 
-            placeholder="811 234 5678" 
-            maxLength="15" 
-            value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
-            style={{ ...inputStyle, fontSize: '24px', fontWeight: 800, letterSpacing: '2px' }} 
-          />
-          <button onClick={verificarCelular} disabled={cargando} style={btnStyle}>
-            {cargando ? 'Buscando...' : 'Verificar Celular'}
-          </button>
+    <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a', fontFamily: 'system-ui, sans-serif', padding: '15px' }}>
+      <div style={{ background: '#1e293b', padding: '40px 30px', borderRadius: '20px', boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)', width: '100%', maxWidth: '400px', boxSizing: 'border-box', border: '1px solid #334155' }}>
+        
+        <div style={{ marginBottom: '35px', textAlign: 'center' }}>
+          <h1 style={{ margin: 0, fontSize: '38px', fontWeight: 900, color: '#0ea5e9' }}>UDAT</h1>
+          <p style={{ color: '#94a3b8', fontWeight: 600, margin: '5px 0 0 0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '3px' }}>Forma Tu Camino</p>
         </div>
-      )}
 
-      {/* SECCIÓN 2: ALTA DE OPERADOR (REGISTRO) */}
-      {pasoActual === 'registro' && (
-        <div style={{ textAlign: 'center' }}>
-          <h3 style={{ color: 'var(--text-light)', marginBottom: '5px', fontSize: '20px' }}>Alta de Operador</h3>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '25px' }}>Completa tu información de ruta</p>
-          
-          <input type="text" name="generacion" placeholder="Generación (Ej. G122)" value={regData.generacion} onChange={handleRegChange} style={inputStyle} />
-          <input type="text" name="nombre" placeholder="Nombre Completo" value={regData.nombre} onChange={handleRegChange} style={inputStyle} />
-          <input type="text" name="empleado" placeholder="Número de Empleado" value={regData.empleado} onChange={handleRegChange} style={inputStyle} />
+        {errorMsg && <p style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', margin: '0 0 20px 0', textAlign: 'center' }}>{errorMsg}</p>}
 
-          <div style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '12px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid var(--border-color)' }}>
-            <input type="checkbox" id="induc-check" checked={esInduccion} onChange={(e) => setEsInduccion(e.target.checked)} style={{ width: 'auto', margin: 0, cursor: 'pointer' }} />
-            <label htmlFor="induc-check" style={{ margin: 0, fontSize: '13px', color: 'var(--text-light)', cursor: 'pointer', textTransform: 'none' }}>Estoy en etapa de Inducción Teórica</label>
+        {/* SECCIÓN 1: INGRESO CELULAR */}
+        {pasoActual === 'telefono' && (
+          <div style={{ textAlign: 'center' }}>
+            <h3 style={{ color: '#f8fafc', marginBottom: '8px', fontSize: '22px' }}>Acceso de Personal</h3>
+            <p style={{ fontSize: '14px', color: '#94a3b8', marginTop: 0, marginBottom: '25px' }}>Ingresa tu número celular registrado</p>
+            
+            <input type="tel" placeholder="811 234 5678" maxLength="15" value={telefono} onChange={(e) => setTelefono(e.target.value)} style={{ ...inputStyle, fontSize: '22px', fontWeight: 800, letterSpacing: '2px' }} />
+            <button onClick={verificarCelular} disabled={cargando} style={btnStyle}>
+              {cargando ? 'Buscando...' : 'Verificar Celular'}
+            </button>
+            <button onClick={() => navigate('/')} style={{ width: '100%', padding: '14px', background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '10px', fontSize: '14px', marginTop: '15px', cursor: 'pointer' }}>Volver al Portal</button>
           </div>
+        )}
 
-          {!esInduccion && (
-            <>
-              <input type="text" name="empresa" placeholder="Empresa (Ej. Larmex)" value={regData.empresa} onChange={handleRegChange} style={inputStyle} />
-              <input type="text" name="unidad" placeholder="Unidad de Negocio" value={regData.unidad} onChange={handleRegChange} style={inputStyle} />
-              <input type="text" name="lider" placeholder="Nombre de tu Líder" value={regData.lider} onChange={handleRegChange} style={inputStyle} />
-              <input type="text" name="gerente" placeholder="Nombre de tu Gerente" value={regData.gerente} onChange={handleRegChange} style={inputStyle} />
-            </>
-          )}
+        {/* SECCIÓN 2: ALTA DE OPERADOR (REGISTRO) */}
+        {pasoActual === 'registro' && (
+          <div style={{ textAlign: 'center' }}>
+            <h3 style={{ color: '#f8fafc', marginBottom: '5px', fontSize: '20px' }}>Alta de Operador</h3>
+            <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '25px' }}>Completa tu información de ruta</p>
+            
+            <input type="text" name="generacion" placeholder="Generación (Ej. G122)" value={regData.generacion} onChange={handleRegChange} style={inputStyle} />
+            <input type="text" name="nombre" placeholder="Nombre Completo" value={regData.nombre} onChange={handleRegChange} style={inputStyle} />
+            <input type="text" name="empleado" placeholder="Número de Empleado" value={regData.empleado} onChange={handleRegChange} style={inputStyle} />
 
-          <button onClick={registrarUsuario} disabled={cargando} style={btnStyle}>
-            {cargando ? 'Activando...' : 'Activar Mi Cuenta'}
-          </button>
-        </div>
-      )}
+            <div style={{ background: '#0f172a', padding: '15px', borderRadius: '10px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid #475569' }}>
+              <input type="checkbox" id="induc-check" checked={esInduccion} onChange={(e) => setEsInduccion(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+              <label htmlFor="induc-check" style={{ margin: 0, fontSize: '13px', color: '#f8fafc', cursor: 'pointer' }}>Estoy en Inducción Teórica</label>
+            </div>
 
-      {/* SECCIÓN 3: LOGIN CONTRASEÑA */}
-      {pasoActual === 'password' && (
-        <div style={{ textAlign: 'center' }}>
-          <h3 style={{ color: 'var(--text-light)', marginBottom: '5px', fontSize: '20px' }}>Clave de Seguridad</h3>
-          <p style={{ fontSize: '14px', color: 'var(--primary)', fontWeight: 700, marginBottom: '25px' }}>
-            ¡Bienvenido de vuelta, {usuarioActual?.nombre_completo.split(' ')[0]}!
-          </p>
-          
-          <input 
-            type="password" 
-            placeholder="••••••••" 
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ ...inputStyle, fontSize: '24px', letterSpacing: '5px' }} 
-          />
-          
-          <button onClick={ingresarApp} style={btnStyle}>Validar e Ingresar</button>
-          
-          <button 
-            onClick={() => { setPasoActual('telefono'); setPassword(''); setErrorMsg(''); }}
-            style={{ width: '100%', padding: '16px', background: 'transparent', color: 'var(--text-light)', border: '1px solid var(--border-color)', borderRadius: '12px', fontSize: '14px', marginTop: '10px', cursor: 'pointer' }}
-          >
-            Volver
-          </button>
-        </div>
-      )}
+            {!esInduccion && (
+              <>
+                <input type="text" name="empresa" placeholder="Empresa (Ej. Larmex)" value={regData.empresa} onChange={handleRegChange} style={inputStyle} />
+                <input type="text" name="unidad" placeholder="Unidad de Negocio" value={regData.unidad} onChange={handleRegChange} style={inputStyle} />
+                <input type="text" name="lider" placeholder="Nombre de tu Líder" value={regData.lider} onChange={handleRegChange} style={inputStyle} />
+                <input type="text" name="gerente" placeholder="Nombre de tu Gerente" value={regData.gerente} onChange={handleRegChange} style={inputStyle} />
+              </>
+            )}
+
+            <button onClick={registrarUsuario} disabled={cargando} style={btnStyle}>
+              {cargando ? 'Activando...' : 'Activar Mi Cuenta'}
+            </button>
+          </div>
+        )}
+
+        {/* SECCIÓN 3: LOGIN CONTRASEÑA */}
+        {pasoActual === 'password' && (
+          <div style={{ textAlign: 'center' }}>
+            <h3 style={{ color: '#f8fafc', marginBottom: '5px', fontSize: '20px' }}>Clave de Seguridad</h3>
+            <p style={{ fontSize: '14px', color: '#0ea5e9', fontWeight: 700, marginBottom: '25px' }}>
+              ¡Bienvenido, {usuarioActual?.nombre_completo?.split(' ')[0] || 'Operador'}!
+            </p>
+            
+            <input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, fontSize: '24px', letterSpacing: '5px' }} />
+            
+            <button onClick={ingresarApp} style={btnStyle}>Validar e Ingresar</button>
+            <button onClick={() => { setPasoActual('telefono'); setPassword(''); setErrorMsg(''); }} style={{ width: '100%', padding: '14px', background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '10px', fontSize: '14px', marginTop: '15px', cursor: 'pointer' }}>Volver</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
