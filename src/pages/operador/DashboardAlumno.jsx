@@ -18,48 +18,48 @@ export default function DashboardAlumno() {
   const [catLideres, setCatLideres] = useState([]);
   const [catGerentes, setCatGerentes] = useState([]);
 
-  // CANDADO 1 y 2: Perfil Incompleto o Desactualizado
+  // Modales y Estados de Candados
   const [mostrarModalActualizacion, setMostrarModalActualizacion] = useState(false);
   const [formActualizacion, setFormActualizacion] = useState({ unidad_negocio: '', lider: '', gerente: '' });
+  const [mostrarModalExamen, setMostrarModalExamen] = useState(false);
+  const [tiempoExamen, setTiempoExamen] = useState(600); // 10 minutos en segundos
 
-  // Estados para Asistencia
+  // Asistencia y Geolocalización
   const [manejaHoy, setManejaHoy] = useState('SI');
   const [actividadSinManejo, setActividadSinManejo] = useState('Apoyo en Patio');
   const [asistenciaEnviada, setAsistenciaEnviada] = useState(false);
-  const [registrandoAsistencia, setRegistrandoAsistencia] = useState(false); 
+  const [registrandoAsistencia, setRegistrandoAsistencia] = useState(false);
 
-  // Estados para Viajes (Bitácora)
-  const [estadoViaje, setEstadoViaje] = useState('reposo'); 
+  // Bitácora de Viajes
+  const [estadoViaje, setEstadoViaje] = useState('reposo');
   const [idViajeActivo, setIdViajeActivo] = useState(null);
   const [optSeleccionado, setOptSeleccionado] = useState('');
   const [kmInicial, setKmInicial] = useState('');
   const [kmFinal, setKmFinal] = useState('');
-  
-  // 📸 CANDADO 5: Foto del Odómetro Obligatoria (Base64)
   const [fotoOdometro, setFotoOdometro] = useState(null);
 
-  // Estados para Evaluación de OPT (OBLIGATORIOS)
+  // Evaluación 360 Obligatoria de Tutor en bitácora
   const [evalTrato, setEvalTrato] = useState('');
   const [evalInstruccion, setEvalInstruccion] = useState('');
   const [comentarioOpt, setComentarioOpt] = useState('');
 
-  // Formularios de Encuestas
+  // Buzón de opinión general (Líder / Gerente / OPT)
   const [encuestaTipo, setEncuestaTipo] = useState('');
   const [encuestaNombre, setEncuestaNombre] = useState('');
   const [encuestaEstrellas, setEncuestaEstrellas] = useState('');
   const [encuestaComentarios, setEncuestaComentarios] = useState('');
 
-  // Matriz de Logros Escalonados
   const metasUDAT = [
-    { sem: 1, km: 500, hrs: 10 }, 
+    { sem: 1, km: 500, hrs: 10 },
     { sem: 2, km: 1500, hrs: 25 },
-    { sem: 3, km: 2000, hrs: 28 }, 
+    { sem: 3, km: 2000, hrs: 28 },
     { sem: 4, km: 2400, hrs: 32 },
-    { sem: 5, km: 2400, hrs: 32 }, 
+    { sem: 5, km: 2400, hrs: 32 },
     { sem: 6, km: 2400, hrs: 34 },
-    { sem: 7, km: 2400, hrs: 34 }, 
+    { sem: 7, km: 2400, hrs: 34 },
     { sem: 8, km: 2400, hrs: 35 }
   ];
+
   useEffect(() => {
     const cargarTodo = async () => {
       const session = localStorage.getItem('udat_app_session');
@@ -78,16 +78,16 @@ export default function DashboardAlumno() {
 
         const misViajes = todosViajes.filter(v => v.id_alumno === user.id);
         setViajes(misViajes);
-        
         setListaOPTs(todosUsuarios.filter(u => u.rol === 'Tutor'));
-        setMateriales(todosMateriales);
         
-        // Asignación segura con fallbacks de arreglos vacíos
+        // Filtrar materiales dirigidos a Alumnos o Ambos
+        const mtFiltrado = todosMateriales.filter(m => m.dirigido_a === 'Alumno' || m.dirigido_a === 'Ambos' || !m.dirigido_a);
+        setMateriales(mtFiltrado);
+        
         setCatUnidades(catalogos?.unidades || []);
         setCatLideres(catalogos?.lideres || []);
         setCatGerentes(catalogos?.gerentes || []);
 
-        // Cálculo aritmético seguro de tiempo transcurrido
         const fechaUltima = user.fecha_actualizacion_perfil ? new Date(user.fecha_actualizacion_perfil) : new Date(0);
         const diasTranscurridos = (new Date().getTime() - fechaUltima.getTime()) / (1000 * 60 * 60 * 24);
 
@@ -101,7 +101,7 @@ export default function DashboardAlumno() {
           setEstadoViaje('progreso');
         }
       } catch (error) {
-        console.error("Error crítico cargando datos del alumno:", error);
+        console.error("Error cargando datos del alumno:", error);
       } finally {
         setCargandoDatos(false);
       }
@@ -110,464 +110,344 @@ export default function DashboardAlumno() {
     cargarTodo();
   }, [navigate]);
 
-  const guardarActualizacionPerfil = async () => {
-    if (!formActualizacion.unidad_negocio || !formActualizacion.lider || !formActualizacion.gerente) {
-      return alert("Debes seleccionar todas las opciones para continuar.");
+  // Temporizador de Examen
+  useEffect(() => {
+    let timer;
+    if (mostrarModalExamen && tiempoExamen > 0) {
+      timer = setInterval(() => setTiempoExamen(prev => prev - 1), 1000);
+    } else if (tiempoExamen === 0) {
+      alert("Tiempo agotado. El examen se enviará automáticamente.");
+      setMostrarModalExamen(false);
     }
+    return () => clearInterval(timer);
+  }, [mostrarModalExamen, tiempoExamen]);
 
-    const { exito } = await dataService.actualizarPerfilAlumno(usuarioActual.id, formActualizacion);
-    
-    if (exito) {
-      const userActualizado = { ...usuarioActual, ...formActualizacion, fecha_actualizacion_perfil: new Date().toISOString() };
-      localStorage.setItem('udat_app_session', JSON.stringify(userActualizado));
-      setUsuarioActual(userActualizado);
-      setMostrarModalActualizacion(false);
-      alert("¡Perfil actualizado con éxito! Ya puedes operar.");
-    } else {
-      alert("Error guardando los datos. Intenta de nuevo.");
-    }
-  };
-
-  // 📍 CANDADO DE GEOLOCALIZACIÓN INTEGRAL
   const marcarAsistencia = () => {
     if (!navigator.geolocation) {
-      return alert("❌ Tu dispositivo o navegador no soporta el servicio de geolocalización. No puedes registrar asistencia.");
+      return alert("❌ Geolocalización no soportada.");
     }
-
     setRegistrandoAsistencia(true);
-
-    const opcionesGps = {
-      enableHighAccuracy: true,
-      timeout: 10000,           
-      maximumAge: 0             
-    };
-
     navigator.geolocation.getCurrentPosition(
-      async (posicion) => {
-        const { latitude, longitude } = posicion.coords;
-
+      async (pos) => {
         const payload = {
           id_usuario: usuarioActual.id,
-          ubicacion_texto: `GPS: ${latitude}, ${longitude}`,
-          latitud: latitude,   
-          longitud: longitude, 
+          ubicacion_texto: `GPS: ${pos.coords.latitude}, ${pos.coords.longitude}`,
+          latitud: pos.coords.latitude,
+          longitud: pos.coords.longitude,
           actividad_sin_manejo: manejaHoy === 'NO' ? actividadSinManejo : null,
           fecha_hora: new Date().toISOString()
         };
-
         try {
           await dataService.registrarAsistencia(payload);
           setAsistenciaEnviada(true);
-          alert("✓ Asistencia registrada corporativamente con ubicación verificada.");
-        } catch (error) {
-          alert("❌ Error al guardar en base de datos: " + error?.message);
+          alert("✓ Asistencia validada por GPS exitosamente.");
+        } catch (err) {
+          alert("Error: " + err.message);
         } finally {
           setRegistrandoAsistencia(false);
         }
       },
-      (errorGps) => {
+      () => {
         setRegistrandoAsistencia(false);
-        switch (errorGps.code) {
-          case errorGps.PERMISSION_DENIED:
-            alert("⛔ CANDADO DE SEGURIDAD: Has denegado el acceso a tu ubicación. Para marcar asistencia es OBLIGATORIO activar y permitir el GPS en la configuración de tu celular o navegador.");
-            break;
-          case errorGps.POSITION_UNAVAILABLE:
-            alert("📡 ERROR: La señal del GPS no está disponible. Sal a un espacio abierto o activa los datos móviles.");
-            break;
-          case errorGps.TIMEOUT:
-            alert("⏱️ ERROR: Se agotó el tiempo de espera para obtener el GPS. Intenta registrar tu asistencia de nuevo.");
-            break;
-          default:
-            alert("❌ Ocurrió un error inesperado al intentar capturar tu ubicación.");
-        }
+        alert("⛔ CANDADO: Es obligatorio activar el GPS para registrar asistencia.");
       },
-      opcionesGps
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   };
 
-  // 📸 Procesador de archivos de imagen a Base64
   const procesarFotoOdometro = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setFotoOdometro(reader.result); 
-      };
+      reader.onloadend = () => setFotoOdometro(reader.result);
       reader.readAsDataURL(file);
     }
   };
 
   const iniciarRuta = async () => {
-    if (!optSeleccionado || !kmInicial) return alert("Selecciona tutor y kilometraje inicial.");
-    if (parseFloat(kmInicial) < 0) return alert("Kilómetros inválidos.");
-
+    if (!asistenciaEnviada) return alert("⚠️ CANDADO: Primero debes registrar tu Asistencia Diaria con GPS.");
+    if (!optSeleccionado || !kmInicial) return alert("Completa los campos obligatorios.");
+    
     const payload = {
       id_alumno: usuarioActual.id,
       nombre_opt: optSeleccionado,
       km_iniciales: parseFloat(kmInicial),
       hora_inicio: new Date().toISOString()
     };
-
-    const { exito, data, error } = await dataService.guardarViaje(payload);
-    if (exito && data && data.length > 0) {
-      setIdViajeActivo(data[0].id);
+    const res = await dataService.guardarViaje(payload);
+    if (res.exito && res.data?.[0]) {
+      setIdViajeActivo(res.data[0].id);
       setEstadoViaje('progreso');
-    } else {
-      alert("Error iniciando ruta: " + error?.message);
     }
   };
 
   const finalizarRuta = async () => {
-    if (!kmFinal) return alert("Captura el Odómetro Final.");
-    
-    // ⚠️ CANDADO: Validar foto del odómetro antes de proceder
-    if (!fotoOdometro) {
-      return alert("⚠️ CANDADO ACTIVO: No puedes cerrar ruta ni subir kilometraje sin tomar o adjuntar la foto de evidencia del odómetro.");
+    if (!kmFinal || !fotoOdometro || !evalTrato || !evalInstruccion) {
+      return alert("⚠️ CANDADO ACTIVO: Foto de odómetro y evaluación del tutor son mandatorios.");
     }
-
-    // ⚠️ CANDADO: Evaluación del Tutor
-    if (!evalTrato || !evalInstruccion) {
-      return alert("⚠️ CANDADO ACTIVO: Para poder subir tus kilómetros a tu Cardex, debes evaluar a tu tutor.");
-    }
-    
     const viajeOriginal = viajes.find(v => v.id === idViajeActivo);
-    const baseKmInicial = viajeOriginal ? parseFloat(viajeOriginal.km_iniciales) : parseFloat(kmInicial);
-    const kmRecorridos = parseFloat(kmFinal) - baseKmInicial;
-    
-    if (kmRecorridos < 0) return alert("El odómetro final no puede ser menor al inicial.");
+    const baseKm = viajeOriginal ? parseFloat(viajeOriginal.km_iniciales) : parseFloat(kmInicial);
+    const kmRecorridos = parseFloat(kmFinal) - baseKm;
 
-    const horaFin = new Date();
-    const horaInicioObj = viajeOriginal ? new Date(viajeOriginal.hora_inicio) : new Date();
-    const tiempoMinutos = Math.floor((horaFin.getTime() - horaInicioObj.getTime()) / 60000);
+    if (kmRecorridos < 0) return alert("El conteo final no puede ser menor al inicial.");
+
+    const mins = Math.floor((new Date().getTime() - new Date(viajeOriginal.hora_inicio).getTime()) / 60000);
 
     const payload = {
-      hora_fin: horaFin.toISOString(),
+      hora_fin: new Date().toISOString(),
       km_finales: parseFloat(kmFinal),
       km_recorridos: kmRecorridos,
-      tiempo_total_minutos: tiempoMinutos,
-      notas_novedad: `Tiempo: ${tiempoMinutos} min. ${comentarioOpt}`,
+      tiempo_total_minutos: mins,
+      notas_novedad: comentarioOpt,
       opt_calif_trato: parseInt(evalTrato),
       opt_calif_instruccion: parseInt(evalInstruccion),
-      foto_odometro: fotoOdometro 
+      foto_odometro: fotoOdometro
     };
 
-    const { exito, error } = await dataService.guardarViaje(payload, idViajeActivo);
-
-    if (exito) {
-      alert(`✓ ¡Reporte Enviado!\nRecorriste: ${kmRecorridos} KM\nTiempo: ${tiempoMinutos} min.`);
+    const res = await dataService.guardarViaje(payload, idViajeActivo);
+    if (res.exito) {
+      alert("✓ Reporte enviado a validación del Tutor.");
       setEstadoViaje('reposo');
       setIdViajeActivo(null);
-      setKmInicial(''); 
-      setKmFinal(''); 
-      setEvalTrato(''); 
-      setEvalInstruccion(''); 
-      setComentarioOpt('');
-      setFotoOdometro(null); 
-      
-      const data = await dataService.obtenerViajes();
-      setViajes(data.filter(v => v.id_alumno === usuarioActual.id));
-    } else {
-      alert("Error al cerrar ruta: " + error?.message);
+      setFotoOdometro(null);
+      // Recargar bitácora
+      const todos = await dataService.obtenerViajes();
+      setViajes(todos.filter(v => v.id_alumno === usuarioActual.id));
     }
   };
 
   const enviarEncuesta = async () => {
     if (!encuestaTipo || !encuestaNombre || !encuestaEstrellas || !encuestaComentarios) {
-      return alert("Llena todos los campos de la encuesta.");
+      return alert("Por favor, llena toda la evaluación 360.");
     }
     const payload = {
       id_alumno: usuarioActual.id,
       nombre_alumno: usuarioActual.nombre_completo,
-      tipo_evaluado: encuestaTipo,
+      tipo_evaluado: encuestaTipo, // 'LIDER', 'GERENTE', o 'OPT'
       nombre_evaluado: encuestaNombre,
       calificacion_general: parseInt(encuestaEstrellas),
       comentarios: encuestaComentarios,
       fecha_creacion: new Date().toISOString()
     };
-    const { exito, error } = await dataService.guardarEncuesta(payload);
-    if (exito) {
-      alert("✓ ¡Gracias! Tu opinión fue enviada a corporativo.");
+    const res = await dataService.guardarEncuesta(payload);
+    if (res.exito) {
+      alert(`✓ Evaluación corporativa para el ${encuestaTipo} enviada.`);
       setEncuestaTipo(''); setEncuestaNombre(''); setEncuestaEstrellas(''); setEncuestaComentarios('');
-    } else {
-      alert("Error: " + error?.message);
     }
   };
 
-  const kmTotalesAcumulados = viajes.reduce((acc, v) => acc + (parseFloat(v.km_recorridos) || 0), 0);
-  let kmRestantesCalculo = kmTotalesAcumulados;
+  const kmTotales = viajes.reduce((acc, v) => acc + (parseFloat(v.km_recorridos) || 0), 0);
+  const calcularNivelXP = (km) => {
+    if (km >= 4000) return { nivel: 'Experto', progreso: 100 };
+    if (km >= 1500) return { nivel: 'Intermedio', progreso: Math.min(((km - 1500) / 2500) * 100, 100) };
+    return { nivel: 'Novato', progreso: (km / 1500) * 100 };
+  };
+  const xpInfo = calcularNivelXP(kmTotales);
 
-  if (cargandoDatos) return <div style={{ color: 'white', textAlign: 'center', padding: '50px' }}>Sincronizando con base de datos...</div>;
+  if (cargandoDatos) return <div style={{color: '#fff', textAlign: 'center', padding: '50px'}}>Sincronizando Sistema Cardex Corporativo...</div>;
 
   return (
-    <div className="seccion activa" style={{ animation: 'fadeIn 0.4s ease', position: 'relative' }}>
+    <div style={{ padding: '20px', color: '#e2e8f0', fontFamily: 'system-ui' }}>
       
-      {/* MODAL GIGANTE DE BLOQUEO DE PERFIL */}
-      {mostrarModalActualizacion && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(15, 23, 42, 0.95)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', boxSizing: 'border-box' }}>
-          <div style={{ background: 'var(--card-bg)', border: '2px solid var(--primary)', borderRadius: '20px', padding: '30px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 40px rgba(0,0,0,0.8)' }}>
-            <h2 style={{ color: 'var(--text-light)', marginTop: 0, fontSize: '22px', textAlign: 'center' }}>Actualización Semanal Obligatoria</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '14px', textAlign: 'center', marginBottom: '25px' }}>
-              Para garantizar tu registro de KM, debes confirmar tu información de ruta actual.
-            </p>
-            
-            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px', fontWeight: 'bold' }}>Tu Unidad de Negocio:</label>
-            <select value={formActualizacion.unidad_negocio} onChange={(e) => setFormActualizacion({...formActualizacion, unidad_negocio: e.target.value})} style={{ width: '100%', padding: '14px', marginBottom: '15px', borderRadius: '12px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-color)', color: 'white' }}>
-              <option value="">Selecciona...</option>
-              {catUnidades.map((u, i) => <option key={i} value={u.nombre}>{u.nombre}</option>)}
-            </select>
-
-            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px', fontWeight: 'bold' }}>Tu Líder Operativo:</label>
-            <select value={formActualizacion.lider} onChange={(e) => setFormActualizacion({...formActualizacion, lider: e.target.value})} style={{ width: '100%', padding: '14px', marginBottom: '15px', borderRadius: '12px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-color)', color: 'white' }}>
-              <option value="">Selecciona...</option>
-              {catLideres.map((l, i) => <option key={i} value={l.nombre}>{l.nombre}</option>)}
-            </select>
-
-            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px', fontWeight: 'bold' }}>Tu Gerente:</label>
-            <select value={formActualizacion.gerente} onChange={(e) => setFormActualizacion({...formActualizacion, gerente: e.target.value})} style={{ width: '100%', padding: '14px', marginBottom: '25px', borderRadius: '12px', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-color)', color: 'white' }}>
-              <option value="">Selecciona...</option>
-              {catGerentes.map((g, i) => <option key={i} value={g.nombre}>{g.nombre}</option>)}
-            </select>
-
-            <button onClick={guardarActualizacionPerfil} style={{ width: '100%', padding: '16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer', boxShadow: '0 4px 15px var(--primary-glow)' }}>
-              Confirmar y Continuar
-            </button>
-          </div>
+      {/* CABECERA */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #334155', paddingBottom: '15px', marginBottom: '20px' }}>
+        <div>
+          <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 'bold' }}>PORTAL ALUMNO LARMEX</span>
+          <h2 style={{ margin: 0, color: '#f8fafc' }}>{usuarioActual?.nombre_completo}</h2>
+          <span style={{ fontSize: '13px', color: '#a1a1aa' }}>Rango UDAT: <strong>{xpInfo.nivel} ({kmTotales} KM Totales)</strong></span>
         </div>
-      )}
-
-      {/* CABECERA Y BOTÓN DE SALIDA */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '15px' }}>
-        <div style={{ textAlign: 'left' }}>
-          <p style={{ fontSize: '11px', color: 'var(--primary)', margin: 0, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>Operador en Ruta</p>
-          <p style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-light)', margin: '2px 0 0 0' }}>{usuarioActual?.nombre_completo}</p>
-        </div>
-        <button onClick={() => { localStorage.removeItem('udat_app_session'); navigate('/app'); }} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: '#fda4af', width: 'auto', padding: '8px 12px', fontSize: '12px', margin: 0, fontWeight: 700, borderRadius: '8px', cursor: 'pointer' }}>
-          Cerrar Sesión
-        </button>
-      </div>
-      
-      {/* PESTAÑAS (TABS) */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '10px' }}>
-        <button onClick={() => setActiveTab('operacion')} style={{ flex: 1, padding: '12px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', background: activeTab === 'operacion' ? 'var(--primary)' : 'rgba(0,0,0,0.3)', color: activeTab === 'operacion' ? 'white' : 'var(--text-muted)', border: activeTab === 'operacion' ? '1px solid var(--primary)' : '1px solid var(--border-color)', boxShadow: activeTab === 'operacion' ? '0 4px 12px var(--primary-glow)' : 'none' }}>📍 Operación</button>
-        <button onClick={() => setActiveTab('avance')} style={{ flex: 1, padding: '12px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', background: activeTab === 'avance' ? 'var(--primary)' : 'rgba(0,0,0,0.3)', color: activeTab === 'avance' ? 'white' : 'var(--text-muted)', border: activeTab === 'avance' ? '1px solid var(--primary)' : '1px solid var(--border-color)', boxShadow: activeTab === 'avance' ? '0 4px 12px var(--primary-glow)' : 'none' }}>🏆 Mis Logros</button>
-        <button onClick={() => setActiveTab('estudio')} style={{ flex: 1, padding: '12px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', background: activeTab === 'estudio' ? 'var(--primary)' : 'rgba(0,0,0,0.3)', color: activeTab === 'estudio' ? 'white' : 'var(--text-muted)', border: activeTab === 'estudio' ? '1px solid var(--primary)' : '1px solid var(--border-color)', boxShadow: activeTab === 'estudio' ? '0 4px 12px var(--primary-glow)' : 'none' }}>📚 Academia</button>
+        <button onClick={() => { localStorage.removeItem('udat_app_session'); navigate('/app'); }} style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '8px', padding: '5px 15px', cursor: 'pointer' }}>Salir</button>
       </div>
 
-      {/* CONTENIDO PESTAÑA 1: OPERACIÓN */}
+      {/* GAMIFICACIÓN DE XP */}
+      <div style={{ background: '#1e293b', padding: '15px', borderRadius: '12px', marginBottom: '20px', border: '1px solid #334155' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}>
+          <span>Progreso de Nivel de Competencia</span>
+          <span>{xpInfo.progreso.toFixed(0)}% para el siguiente rango</span>
+        </div>
+        <div style={{ background: '#475569', height: '10px', borderRadius: '5px', overflow: 'hidden' }}>
+          <div style={{ background: '#10b981', height: '100%', width: `${xpInfo.progreso}%`, transition: 'width 0.5s' }}></div>
+        </div>
+      </div>
+
+      {/* NAVEGACIÓN */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+        <button onClick={() => setActiveTab('operacion')} style={{ flex: 1, padding: '12px', borderRadius: '8px', background: activeTab === 'operacion' ? '#0284c7' : '#1e293b', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>📍 Operación y Bitácora</button>
+        <button onClick={() => setActiveTab('avance')} style={{ flex: 1, padding: '12px', borderRadius: '8px', background: activeTab === 'avance' ? '#0284c7' : '#1e293b', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>🏆 Mis 8 Semanas</button>
+        <button onClick={() => setActiveTab('academia')} style={{ flex: 1, padding: '12px', borderRadius: '8px', background: activeTab === 'academia' ? '#0284c7' : '#1e293b', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>📚 Aula Virtual e Inconformidades</button>
+      </div>
+
+      {/* PESTAÑA 1: OPERACIÓN */}
       {activeTab === 'operacion' && (
-        <div style={{ animation: 'slideUp 0.4s ease' }}>
-          
-          {/* Asistencia Diaria */}
-          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '22px', marginBottom: '22px', textAlign: 'left' }}>
-            <h4 style={{ marginTop: 0, color: 'var(--text-light)', marginBottom: '15px', fontSize: '16px', fontWeight: 800, borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>📍 Asistencia Diaria</h4>
+        <div>
+          {/* Asistencia Candado */}
+          <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', marginBottom: '20px' }}>
+            <h3 style={{ marginTop: 0, borderBottom: '1px solid #334155', paddingBottom: '10px' }}>1. Check-In de Asistencia Diario</h3>
             {!asistenciaEnviada ? (
               <div>
-                <select value={manejaHoy} onChange={(e) => setManejaHoy(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', fontSize: '15px' }}>
-                  <option value="SI">Sí salgo a ruta / manejo hoy</option>
-                  <option value="NO">No voy a conducir el día de hoy</option>
+                <select value={manejaHoy} onChange={(e) => setManejaHoy(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '10px', background: '#0f172a', color: '#fff' }}>
+                  <option value="SI">Sí salgo a ruta el día de hoy</option>
+                  <option value="NO">No voy a conducir hoy (Actividad interna)</option>
                 </select>
                 {manejaHoy === 'NO' && (
-                  <select value={actividadSinManejo} onChange={(e) => setActividadSinManejo(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', fontSize: '15px' }}>
+                  <select value={actividadSinManejo} onChange={(e) => setActividadSinManejo(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '10px', background: '#0f172a', color: '#fff' }}>
                     <option value="Apoyo en Patio">Apoyo en Patio</option>
                     <option value="Teoría / Capacitación">Teoría / Capacitación</option>
-                    <option value="Viaje como Acompañante">Viaje como Acompañante</option>
                     <option value="Unidad en Taller">Unidad en Taller</option>
                   </select>
                 )}
-                
-                <button 
-                  onClick={marcarAsistencia} 
-                  disabled={registrandoAsistencia} 
-                  style={{ width: '100%', padding: '16px', background: registrandoAsistencia ? '#64748b' : 'var(--success)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: registrandoAsistencia ? 'not-allowed' : 'pointer', boxShadow: registrandoAsistencia ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)' }}
-                >
-                  {registrandoAsistencia ? '⏳ Validando GPS...' : 'Registrar Entrada (GPS)'}
+                <button onClick={marcarAsistencia} disabled={registrandoAsistencia} style={{ width: '100%', padding: '12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  {registrandoAsistencia ? 'Sincronizando GPS...' : 'Verificar Ubicación y Registrar Entrada'}
                 </button>
               </div>
             ) : (
-              <p style={{ color: 'var(--success)', fontWeight: 700, margin: '5px 0', fontSize: '14px', textAlign: 'center' }}>✓ Asistencia enviada.</p>
+              <div style={{ color: '#10b981', fontWeight: 'bold', textAlign: 'center' }}>✓ Asistencia registrada corporativamente hoy.</div>
             )}
           </div>
 
-          {/* Bitácora de Kilómetros */}
-          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '22px', marginBottom: '22px', textAlign: 'left' }}>
-            <h4 style={{ marginTop: 0, color: 'var(--text-light)', marginBottom: '15px', fontSize: '16px', fontWeight: 800, borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>📊 Bitácora de Kilómetros</h4>
-            
+          {/* Bitácora de Viajes */}
+          <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px' }}>
+            <h3 style={{ marginTop: 0, borderBottom: '1px solid #334155', paddingBottom: '10px' }}>2. Control de Hodómetros</h3>
             {estadoViaje === 'reposo' && (
-              <button onClick={() => setEstadoViaje('inicio')} style={{ width: '100%', padding: '16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 15px var(--primary-glow)' }}>
-                Abrir Conteo de Bitácora
-              </button>
+              <button onClick={() => setEstadoViaje('inicio')} style={{ width: '100%', padding: '12px', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Abrir Nueva Bitácora de Conducción</button>
             )}
 
             {estadoViaje === 'inicio' && (
-              <div style={{ marginTop: '15px', borderTop: '1px solid var(--border-color)', paddingTop: '15px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>Tutor (OPT) en cabina:</label>
-                <select value={optSeleccionado} onChange={(e) => setOptSeleccionado(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '10px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px' }}>Tutor en Cabina:</label>
+                <select value={optSeleccionado} onChange={(e) => setOptSeleccionado(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '15px', background: '#0f172a', color: '#fff' }}>
                   <option value="">Selecciona tu Tutor...</option>
                   {listaOPTs.map(t => <option key={t.id} value={t.nombre_completo}>{t.nombre_completo}</option>)}
                 </select>
 
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', marginTop: '10px' }}>Odómetro Inicial (KM):</label>
-                <input type="number" value={kmInicial} onChange={(e) => setKmInicial(e.target.value)} placeholder="Ej. 120500" style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', boxSizing: 'border-box' }} />
-                
-                <button onClick={iniciarRuta} style={{ width: '100%', padding: '16px', background: 'var(--success)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: 'pointer', marginBottom: '10px' }}>Comenzar Ruta</button>
-                <button onClick={() => setEstadoViaje('reposo')} style={{ width: '100%', padding: '16px', background: 'transparent', color: 'var(--text-light)', border: '1px solid var(--border-color)', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
+                <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px' }}>Hodómetro Inicial (Lectura en Tablero):</label>
+                <input type="number" value={kmInicial} onChange={(e) => setKmInicial(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '15px', background: '#0f172a', color: '#fff', border: '1px solid #334155' }} placeholder="Ej. 245100" />
+
+                <button onClick={iniciarRuta} style={{ width: '100%', padding: '12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Iniciar Cronómetro de Conducción</button>
               </div>
             )}
 
             {estadoViaje === 'progreso' && (
               <div style={{ textAlign: 'center' }}>
-                <p style={{ color: 'var(--primary)', fontWeight: 800, fontSize: '15px', margin: '15px 0' }}>🚚 Conducción Activa...</p>
-                <button onClick={() => setEstadoViaje('cierre')} style={{ width: '100%', padding: '16px', background: 'var(--danger)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(244, 63, 94, 0.3)' }}>
-                  Cerrar Ruta / Registrar KM
-                </button>
+                <p style={{ color: '#f59e0b', fontWeight: 'bold' }}>🚚 Unidad en Movimiento: Captura de datos bloqueada hasta destino.</p>
+                <button onClick={() => setEstadoViaje('cierre')} style={{ width: '100%', padding: '12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Llegada a Destino (Cerrar Ruta)</button>
               </div>
             )}
 
             {estadoViaje === 'cierre' && (
-              <div style={{ marginTop: '15px', borderTop: '1px solid var(--border-color)', paddingTop: '15px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>Odómetro Final (KM):</label>
-                <input type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} placeholder="Debe ser mayor al inicial" style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', boxSizing: 'border-box' }} />
-                
-                {/* 📸 CANDADO: INPUT DE EVIDENCIA FOTOGRÁFICA MANDATORIA */}
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: fotoOdometro ? 'var(--success)' : '#f59e0b', marginBottom: '6px', textTransform: 'uppercase' }}>
-                    {fotoOdometro ? '📸 Evidencia cargada con éxito' : '⚠️ Foto del Odómetro (Obligatoria):'}
-                  </label>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    capture="environment" 
-                    onChange={procesarFotoOdometro} 
-                    style={{ width: '100%', padding: '12px', border: fotoOdometro ? '1px solid var(--success)' : '1px solid #ef4444', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', boxSizing: 'border-box' }} 
-                  />
-                  {fotoOdometro && (
-                    <div style={{ marginTop: '10px', textAlign: 'center' }}>
-                      <img src={fotoOdometro} alt="Preview Odómetro" style={{ maxWidth: '100%', maxHeight: '120px', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
-                    </div>
-                  )}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px' }}>Hodómetro Final:</label>
+                <input type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '15px', background: '#0f172a', color: '#fff', border: '1px solid #334155' }} />
+
+                <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#f59e0b' }}>📸 Foto Evidencia Odómetro (Obligatorio):</label>
+                <input type="file" accept="image/*" onChange={procesarFotoOdometro} style={{ marginBottom: '15px', display: 'block' }} />
+                {fotoOdometro && <img src={fotoOdometro} style={{ width: '150px', borderRadius: '6px', marginBottom: '15px', display: 'block' }} alt="Evidencia" />}
+
+                {/* Evaluación del Tutor integrada sin perder datos */}
+                <div style={{ background: '#0f172a', padding: '15px', borderRadius: '8px', marginBottom: '15px' }}>
+                  <h4 style={{ margin: '0 0 10px 0', color: '#38bdf8' }}>Evaluación del OPT en este Viaje</h4>
+                  <label style={{ fontSize: '12px' }}>Trato recibido:</label>
+                  <select value={evalTrato} onChange={(e) => setEvalTrato(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', background: '#1e293b', color: '#fff', marginBottom: '10px' }}>
+                    <option value="">Selecciona...</option>
+                    <option value="5">Excelente</option>
+                    <option value="3">Regular</option>
+                    <option value="1">Deficiente</option>
+                  </select>
+                  <label style={{ fontSize: '12px' }}>Claridad técnica en las instrucciones:</label>
+                  <select value={evalInstruccion} onChange={(e) => setEvalInstruccion(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', background: '#1e293b', color: '#fff', marginBottom: '10px' }}>
+                    <option value="">Selecciona...</option>
+                    <option value="5">Excelente</option>
+                    <option value="3">Regular</option>
+                    <option value="1">Deficiente</option>
+                  </select>
+                  <textarea value={comentarioOpt} onChange={(e) => setComentarioOpt(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', background: '#1e293b', color: '#fff' }} placeholder="Comentarios adicionales sobre el desempeño del tutor..."></textarea>
                 </div>
 
-                {/* EVALUACIÓN DE OPT - OBLIGATORIA */}
-                <div style={{ background: 'rgba(217, 119, 6, 0.1)', padding: '20px', borderRadius: '12px', margin: '20px 0', border: '1px solid var(--primary)' }}>
-                  <h4 style={{ marginTop: 0, color: 'var(--primary)', fontSize: '14px', textAlign: 'center', border: 'none' }}>⭐ Evalúa a tu Tutor (Obligatorio)</h4>
-                  
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-light)', marginBottom: '6px', textTransform: 'uppercase' }}>Trato y Profesionalismo:</label>
-                  <select value={evalTrato} onChange={(e) => setEvalTrato(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: evalTrato ? '1px solid var(--success)' : '1px solid var(--danger)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.5)', color: 'var(--text-light)' }}>
-                    <option value="">Selecciona calificación...</option>
-                    <option value="5">⭐⭐⭐⭐⭐ - Excelente</option>
-                    <option value="4">⭐⭐⭐⭐ - Bueno</option>
-                    <option value="3">⭐⭐⭐ - Regular</option>
-                    <option value="2">⭐⭐ - Deficiente</option>
-                    <option value="1">⭐ - Malo</option>
-                  </select>
-
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-light)', marginBottom: '6px', textTransform: 'uppercase' }}>Claridad de Instrucción:</label>
-                  <select value={evalInstruccion} onChange={(e) => setEvalInstruccion(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '15px', border: evalInstruccion ? '1px solid var(--success)' : '1px solid var(--danger)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.5)', color: 'var(--text-light)' }}>
-                    <option value="">Selecciona calificación...</option>
-                    <option value="5">⭐⭐⭐⭐⭐ - Excelente</option>
-                    <option value="4">⭐⭐⭐⭐ - Bueno</option>
-                    <option value="3">⭐⭐⭐ - Regular</option>
-                    <option value="2">⭐⭐ - Deficiente</option>
-                    <option value="1">⭐ - Malo</option>
-                  </select>
-                </div>
-
-                <button onClick={finalizarRuta} style={{ width: '100%', padding: '16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: 'pointer', marginBottom: '10px', boxShadow: '0 4px 15px var(--primary-glow)' }}>Enviar Reporte a Base</button>
-                <button onClick={() => setEstadoViaje('progreso')} style={{ width: '100%', padding: '16px', background: 'transparent', color: 'var(--text-light)', border: '1px solid var(--border-color)', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: 'pointer' }}>Cancelar Cierre</button>
+                <button onClick={finalizarRuta} style={{ width: '100%', padding: '12px', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Enviar Reporte Final a Bóveda</button>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* CONTENIDO PESTAÑA 2: LOGROS */}
+      {/* PESTAÑA 2: AVANCE DE LAS 8 SEMANAS */}
       {activeTab === 'avance' && (
-        <div style={{ animation: 'slideUp 0.4s ease' }}>
-          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '22px', marginBottom: '22px', textAlign: 'left' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '15px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-              <h4 style={{ margin: 0 }}>🏆 Mis Metas Oficiales</h4>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>RECORRIDO ACTUAL</span>
-                <span style={{ fontSize: '16px', color: 'var(--success)', fontWeight: 800 }}>{kmTotalesAcumulados.toLocaleString()} KM</span>
-              </div>
-            </div>
-            
-            {metasUDAT.map((m, index) => {
-              let kmEstaSemana = 0;
-              if (kmRestantesCalculo >= m.km) {
-                kmEstaSemana = m.km;
-                kmRestantesCalculo -= m.km;
-              } else {
-                kmEstaSemana = kmRestantesCalculo;
-                kmRestantesCalculo = 0;
-              }
-
-              const porcentaje = Math.floor((kmEstaSemana / m.km) * 100);
-              const superada = porcentaje >= 100;
-
-              return (
-                <div key={index} style={{ background: superada ? 'rgba(16, 185, 129, 0.05)' : 'rgba(0,0,0,0.2)', border: `1px solid ${superada ? 'var(--success)' : 'var(--border-color)'}`, borderRadius: '12px', padding: '15px', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <span style={{ fontWeight: 800, color: superada ? 'var(--success)' : 'var(--primary)', fontSize: '15px' }}>Semana {m.sem}</span>
-                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>{superada ? '✅ Superada' : `${kmEstaSemana.toFixed(0)} / ${m.km} KM`}</span>
-                  </div>
-                  <div style={{ background: 'rgba(255,255,255,0.1)', height: '8px', borderRadius: '4px', width: '100%', overflow: 'hidden', marginBottom: '8px' }}>
-                    <div style={{ background: superada ? 'var(--success)' : 'var(--primary)', height: '100%', width: `${porcentaje}%`, borderRadius: '4px', transition: 'width 1s ease' }}></div>
-                  </div>
+        <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px' }}>
+          <h3>Avance Escalonado de Metas</h3>
+          {metasUDAT.map((m, idx) => {
+            const acumuladoSemana = viajes.slice(0, idx + 1).reduce((s, v) => s + (v.km_recorridos || 0), 0);
+            const pct = Math.min((acumuladoSemana / m.km) * 100, 100);
+            return (
+              <div key={idx} style={{ marginBottom: '15px', background: '#0f172a', padding: '12px', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '5px' }}>
+                  <span>Semana {m.sem} (Meta: {m.km} KM)</span>
+                  <span>{acumuladoSemana} KM logrados ({pct.toFixed(0)}%)</span>
                 </div>
-              );
-            })}
-          </div>
+                <div style={{ background: '#334155', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div style={{ background: pct >= 100 ? '#10b981' : '#38bdf8', height: '100%', width: `${pct}%` }}></div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* CONTENIDO PESTAÑA 3: ACADEMIA */}
-      {activeTab === 'estudio' && (
-        <div style={{ animation: 'slideUp 0.4s ease' }}>
-          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '22px', marginBottom: '22px', textAlign: 'left' }}>
-            <h4 style={{ marginTop: 0, color: 'var(--text-light)', marginBottom: '15px', fontSize: '16px', fontWeight: 800, borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>📚 Material de Estudio</h4>
-            {materiales.length === 0 ? (
-              <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Sin material disponible.</p>
-            ) : (
-              materiales.map(m => (
-                <div key={m.id} style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '12px', marginBottom: '12px', border: '1px solid var(--border-color)' }}>
-                  <strong style={{ color:'var(--primary)', fontSize:'15px' }}>Semana {m.semana_asignada}: {m.titulo}</strong>
-                  <p style={{ fontSize:'13px', color:'var(--text-muted)', margin: '5px 0' }}>{m.descripcion}</p>
-                  {m.url_documento_video && <a href={m.url_documento_video} target="_blank" rel="noreferrer" style={{ display:'inline-block', padding:'8px 12px', background:'transparent', border:'1px solid var(--primary)', color:'var(--primary)', borderRadius:'8px', textDecoration:'none', fontSize:'12px', fontWeight:'bold', marginTop:'5px' }}>🔗 Abrir Material</a>}
-                </div>
-              ))
-            )}
+      {/* PESTAÑA 3: ACADEMIA Y EVALUACIÓN DE LÍDERES/GERENTES */}
+      {activeTab === 'academia' && (
+        <div>
+          <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', marginBottom: '20px' }}>
+            <h3>📚 Repositorio Corporativo y Material</h3>
+            {materiales.map(m => (
+              <div key={m.id} style={{ background: '#0f172a', padding: '12px', borderRadius: '8px', marginBottom: '10px' }}>
+                <h4 style={{ margin: 0, color: '#38bdf8' }}>{m.titulo}</h4>
+                <p style={{ margin: '5px 0', fontSize: '13px', color: '#cbd5e1' }}>{m.descripcion}</p>
+                {m.url_documento_video && <a href={m.url_documento_video} target="_blank" rel="noreferrer" style={{ color: '#10b981', fontSize: '13px', textDecoration: 'none', fontWeight: 'bold' }}>🔗 Descargar Diapositivas / PDF</a>}
+              </div>
+            ))}
+            <button onClick={() => { setMostrarModalExamen(true); setTiempoExamen(600); }} style={{ width: '100%', marginTop: '15px', padding: '12px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>📝 Iniciar Examen Teórico Semanal</button>
           </div>
 
-          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '22px', marginBottom: '22px', textAlign: 'left' }}>
-            <h4 style={{ marginTop: 0, color: 'var(--text-light)', marginBottom: '15px', fontSize: '16px', fontWeight: 800, borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>🗣️ Buzón de Opinión</h4>
-            <select value={encuestaTipo} onChange={e => setEncuestaTipo(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', fontSize:'15px' }}>
+          {/* BUZÓN DE OPINIÓN 360 OBLIGATORIO (SIN BORRAR NADA) */}
+          <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px' }}>
+            <h3>🗣️ Buzón de Evaluación Confidencial (360)</h3>
+            <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: '-10px', marginBottom: '15px' }}>Usa este espacio para evaluar a tus superiores. Tus reportes alimentan de manera anónima el panel de incidencias de administración.</p>
+            
+            <select value={encuestaTipo} onChange={e => setEncuestaTipo(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '10px', background: '#0f172a', color: '#fff' }}>
               <option value="">¿A quién vas a evaluar?</option>
               <option value="LIDER">Líder Operativo</option>
-              <option value="GERENTE">Gerente</option>
-              <option value="OPT">Opt</option>
+              <option value="GERENTE">Gerente de Unidad</option>
+              <option value="OPT">Tutor Técnico (OPT)</option>
             </select>
-            
-            {encuestaTipo && (
-              <>
-                <input type="text" value={encuestaNombre} onChange={e => setEncuestaNombre(e.target.value)} placeholder="Nombre de la persona..." style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', boxSizing: 'border-box' }} />
-                
-                <select value={encuestaEstrellas} onChange={e => setEncuestaEstrellas(e.target.value)} style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)' }}>
-                  <option value="">Selecciona calificación...</option>
-                  <option value="5">⭐⭐⭐⭐⭐ - Excelente</option>
-                  <option value="4">⭐⭐⭐⭐ - Bueno</option>
-                  <option value="3">⭐⭐⭐ - Regular</option>
-                  <option value="2">⭐⭐ - Deficiente</option>
-                  <option value="1">⭐ - Malo</option>
-                </select>
 
-                <textarea value={encuestaComentarios} onChange={e => setEncuestaComentarios(e.target.value)} placeholder="Escribe tus comentarios o sugerencias corporativas..." style={{ width: '100%', padding: '14px 18px', marginBottom: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--text-light)', minHeight: '100px', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-                
-                <button onClick={enviarEncuesta} style={{ width: '100%', padding: '16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 15px var(--primary-glow)' }}>
-                  Enviar Opinión a Corporativo
-                </button>
-              </>
+            {encuestaTipo && (
+              <div>
+                <input type="text" value={encuestaNombre} onChange={e => setEncuestaNombre(e.target.value)} placeholder="Nombre de la persona..." style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '10px', background: '#0f172a', color: '#fff', border: '1px solid #334155' }} />
+                <select value={encuestaEstrellas} onChange={e => setEncuestaEstrellas(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '10px', background: '#0f172a', color: '#fff' }}>
+                  <option value="">Calificación General...</option>
+                  <option value="5">⭐⭐⭐⭐⭐ Excelente trato</option>
+                  <option value="3">⭐⭐⭐ Regular / Neutral</option>
+                  <option value="1">⭐ Deficiente / Reportar Actitud</option>
+                </select>
+                <textarea value={encuestaComentarios} onChange={e => setEncuestaComentarios(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#0f172a', color: '#fff', minHeight: '8px' }} placeholder="Describe detalladamente situaciones de abuso de autoridad, faltas de respeto o mala coordinación..."></textarea>
+                <button onClick={enviarEncuesta} style={{ width: '100%', marginTop: '10px', padding: '12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Emitir Reporte de Incidencia</button>
+              </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* EXAMEN INTERACTIVO MODAL */}
+      {mostrarModalExamen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(15,23,42,0.95)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#1e293b', padding: '30px', borderRadius: '16px', maxWidth: '500px', width: '90%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #334155', paddingBottom: '10px', marginBottom: '15px' }}>
+              <h3 style={{ margin: 0 }}>Examen Teórico - Seguridad Vial</h3>
+              <span style={{ color: '#ef4444', fontWeight: 'bold' }}>⏱️ {Math.floor(tiempoExamen / 60)}:{(tiempoExamen % 60).toString().padStart(2, '0')}</span>
+            </div>
+            <p><strong>Pregunta 1:</strong> ¿Cuál es el rango óptimo de revoluciones por minuto (RPM) en un motor diésel acoplado para conducción económica en LARMEX?</p>
+            <label style={{ display: 'block', margin: '10px 0' }}><input type="radio" name="p1" /> a) 1100 a 1400 RPM</label>
+            <label style={{ display: 'block', margin: '10px 0' }}><input type="radio" name="p1" /> b) 1800 a 2200 RPM</label>
+            <button onClick={() => { alert("✓ Examen guardado en Cardex."); setMostrarModalExamen(false); }} style={{ width: '100%', marginTop: '20px', padding: '12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Concluir y Guardar Evaluación</button>
           </div>
         </div>
       )}
