@@ -25,7 +25,6 @@ import Encuestas from './pages/Admin/Encuestas';
 
 // --- IMPORTACIONES DE LA VISTA DIRECTIVA ---
 import LoginGeneral from './pages/Auth/LoginGeneral';
-// 👇 AQUÍ ESTÁ LA CORRECCIÓN DEL NOMBRE DEL ARCHIVO 👇
 import AdminDashboardGeneral from './pages/Admin/AdminDashboardGeneral'; 
 
 // ==========================================
@@ -43,31 +42,33 @@ function ScrollToTop() {
 // PANTALLAS GLOBALES (404 Y PORTAL)
 // ==========================================
 const NotFound = () => (
-  <div style={{ textAlign: 'center', marginTop: '100px', color: 'var(--text-light)', padding: '20px' }}>
-    <h1 style={{ fontSize: '72px', color: 'var(--primary)', margin: '0 0 10px 0' }}>404</h1>
-    <h2 style={{ fontSize: '22px', margin: '0 0 20px 0' }}>Oops... Página no encontrada</h2>
-    <p style={{ color: '#94a3b8', marginBottom: '30px' }}>La sección a la que intentas acceder no existe o fue movida.</p>
-    <Link to="/" style={{ padding: '12px 25px', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-color)', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold', transition: '0.3s' }}>
-      Volver al Centro Corporativo
+  <div style={{ textAlign: 'center', minHeight: '100vh', backgroundColor: '#0f172a', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#f8fafc', padding: '20px' }}>
+    <h1 style={{ fontSize: '80px', color: '#0ea5e9', margin: '0 0 10px 0' }}>404</h1>
+    <h2 style={{ fontSize: '24px', margin: '0 0 20px 0' }}>Página no encontrada</h2>
+    <p style={{ color: '#94a3b8', marginBottom: '30px' }}>La sección a la que intentas acceder no existe.</p>
+    <Link to="/" style={{ padding: '14px 30px', background: '#1e293b', color: 'white', border: '1px solid #334155', textDecoration: 'none', borderRadius: '10px', fontWeight: 'bold', transition: '0.3s' }}>
+      Volver al Inicio
     </Link>
   </div>
 );
 
+// PORTAL CON DISEÑO OSCURO CORPORATIVO
 const Portal = () => {
   const baseButtonStyle = {
-    padding: '18px', color: 'white', textDecoration: 'none', borderRadius: '12px',
-    fontWeight: 'bold', width: '90%', maxWidth: '300px', textAlign: 'center',
-    boxShadow: '0 4px 15px rgba(0,0,0,0.3)', transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+    padding: '16px', color: 'white', textDecoration: 'none', borderRadius: '12px',
+    fontWeight: 'bold', width: '100%', maxWidth: '320px', textAlign: 'center',
+    boxShadow: '0 4px 15px rgba(0,0,0,0.4)', transition: 'transform 0.2s ease, opacity 0.2s ease',
+    fontSize: '16px', display: 'block'
   };
 
   return (
-    <div style={{ textAlign: 'center', marginTop: '70px', padding: '0 20px', animation: 'fadeIn 0.4s ease' }}>
-      <img src={logotrayecto} alt="Logo" style={{ width: '160px', marginBottom: '20px', filter: 'drop-shadow(0px 4px 10px rgba(0,0,0,0.3))' }} />
-      <h1 style={{ color: 'var(--primary)', margin: 0, fontSize: '42px', fontWeight: 900, letterSpacing: '1.5px' }}>UDAT</h1>
-      <p style={{ color: '#94a3b8', marginBottom: '40px', fontSize: '15px', fontWeight: 500 }}>Bienvenido al Centro Corporativo.</p>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a', fontFamily: 'system-ui, sans-serif', padding: '20px' }}>
+      <img src={logotrayecto} alt="Logo" style={{ width: '180px', marginBottom: '15px', filter: 'drop-shadow(0px 4px 10px rgba(0,0,0,0.5))' }} />
+      <h1 style={{ color: '#0ea5e9', margin: 0, fontSize: '46px', fontWeight: 900, letterSpacing: '2px' }}>UDAT</h1>
+      <p style={{ color: '#94a3b8', marginBottom: '45px', fontSize: '16px', fontWeight: 500 }}>Bienvenido al Centro Corporativo</p>
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', alignItems: 'center' }}>
-        <Link to="/login-app" style={{ ...baseButtonStyle, background: 'var(--primary)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%', alignItems: 'center' }}>
+        <Link to="/login-app" style={{ ...baseButtonStyle, background: '#0ea5e9' }}>
           🚚 App Operadores
         </Link>
         <Link to="/admin-login" style={{ ...baseButtonStyle, background: '#2563eb' }}>
@@ -139,7 +140,7 @@ export default function App() {
           <Route path="encuestas" element={<Encuestas />} />
         </Route>
 
-        {/* RUTA VISTA GENERAL DIRECTIVA (AJUSTADA AL COMPONENTE CORRECTO) */}
+        {/* RUTA VISTA GENERAL DIRECTIVA */}
         <Route path="/general" element={<RutaProtegida rolPermitido="General"><AdminDashboardGeneral /></RutaProtegida>} />
 
         {/* ERROR 404 CATCH-ALL */}
