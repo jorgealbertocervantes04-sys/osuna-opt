@@ -1,76 +1,64 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../services/supabaseClient';
+import { authService } from '../../services/authService';
 
-export default function LoginGeneral() {
-  const navigate = useNavigate();
-  const [celular, setCelular] = useState('');
-  const [pin, setPin] = useState('');
-  const [autenticando, setAutenticando] = useState(false);
+export default function LoginAdmin() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [cargando, setCargando] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const navigate = useNavigate();
 
-  const ejecutarInicioSesion = async (e) => {
-    e.preventDefault();
-    if (!celular || !pin) return setErrorMsg("Ingresa tu número de celular y PIN.");
+  const handleLogin = async () => {
+    if (!email || !password) {
+      return setErrorMsg("Ingresa tu correo y contraseña maestra.");
+    }
     
-    setAutenticando(true);
+    setCargando(true);
     setErrorMsg('');
-    try {
-      const { data: usuarioBD, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('celular', celular)
-        .eq('pin_seguridad', pin)
-        .single();
 
-      if (error || !usuarioBD) throw new Error("Credenciales incorrectas o número no registrado.");
+    const { exito, datos, mensaje } = await authService.loginAdmin(email, password);
 
-      // Validamos que SÓLO los directivos ("General") puedan entrar aquí
-      if (usuarioBD.rol === 'General') {
-        localStorage.setItem('udat_app_session', JSON.stringify(usuarioBD));
-        navigate('/general'); 
-      } else {
-        setErrorMsg("Acceso denegado. No tienes permisos de Alta Dirección.");
-      }
-    } catch (err) {
-      setErrorMsg(err.message);
-    } finally {
-      setAutenticando(false);
+    if (exito) {
+      localStorage.setItem('udat_app_session', JSON.stringify(datos)); // Unificado a una sola llave
+      navigate('/admin');
+    } else {
+      setErrorMsg(mensaje);
+      setCargando(false);
     }
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a', fontFamily: 'system-ui, sans-serif', padding: '15px' }}>
-      <div style={{ background: '#1e293b', padding: '40px 35px', borderRadius: '20px', width: '100%', maxWidth: '350px', border: '1px solid #334155', boxShadow: '0 20px 40px rgba(0,0,0,0.6)', textAlign: 'center', boxSizing: 'border-box' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#0f172a', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'system-ui, sans-serif', padding: '15px' }}>
+      <div style={{ background: '#1e293b', padding: '40px', borderRadius: '20px', width: '100%', maxWidth: '400px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.6)', border: '1px solid #334155', boxSizing: 'border-box' }}>
         
-        <h2 style={{ color: '#4f46e5', margin: '0 0 5px 0', fontSize: '28px', fontWeight: 900 }}>Alta Dirección</h2>
-        <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '30px' }}>Credenciales corporativas (PIN)</p>
+        <h1 style={{ margin: '0 0 5px 0', color: '#2563eb', fontWeight: 900, fontSize: '32px', letterSpacing: '1px' }}>Centro de Mando</h1>
+        <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '30px' }}>Acceso a Dirección de Operaciones</p>
         
         {errorMsg && <p style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', margin: '0 0 20px 0' }}>{errorMsg}</p>}
 
-        <form onSubmit={ejecutarInicioSesion}>
-          <input 
-            type="tel" 
-            value={celular} 
-            onChange={e => setCelular(e.target.value)} 
-            placeholder="Número Celular" 
-            style={{ width: '100%', padding: '15px', borderRadius: '10px', background: '#0f172a', color: '#ffffff', border: '1px solid #475569', marginBottom: '20px', boxSizing: 'border-box', outline: 'none', fontSize: '16px' }} 
-          />
-          <input 
-            type="password" 
-            value={pin} 
-            onChange={e => setPin(e.target.value)} 
-            placeholder="PIN de Seguridad" 
-            style={{ width: '100%', padding: '15px', borderRadius: '10px', background: '#0f172a', color: '#ffffff', border: '1px solid #475569', marginBottom: '30px', boxSizing: 'border-box', outline: 'none', fontSize: '16px', letterSpacing: '2px' }} 
-          />
-          <button 
-            type="submit" 
-            disabled={autenticando} 
-            style={{ width: '100%', padding: '16px', background: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s', fontSize: '16px', boxShadow: autenticando ? 'none' : '0 4px 15px rgba(79, 70, 229, 0.4)', opacity: autenticando ? 0.7 : 1 }}
-          >
-            {autenticando ? 'Validando Identidad...' : 'Acceder al Tablero'}
-          </button>
-        </form>
+        <input 
+          type="email" 
+          placeholder="Correo corporativo" 
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ width: '100%', padding: '15px', marginBottom: '20px', border: '1px solid #475569', borderRadius: '10px', boxSizing: 'border-box', fontSize: '15px', background: '#0f172a', color: '#ffffff', outline: 'none' }}
+        />
+        <input 
+          type="password" 
+          placeholder="Contraseña maestra" 
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          style={{ width: '100%', padding: '15px', marginBottom: '25px', border: '1px solid #475569', borderRadius: '10px', boxSizing: 'border-box', fontSize: '15px', background: '#0f172a', color: '#ffffff', outline: 'none' }}
+        />
+        
+        <button 
+          onClick={handleLogin}
+          disabled={cargando}
+          style={{ width: '100%', padding: '16px', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '16px', cursor: cargando ? 'not-allowed' : 'pointer', transition: '0.3s', boxShadow: cargando ? 'none' : '0 4px 15px rgba(37, 99, 235, 0.4)', opacity: cargando ? 0.7 : 1 }}
+        >
+          {cargando ? 'Sincronizando bóveda...' : 'Ingresar a la Bóveda'}
+        </button>
 
         <button 
           onClick={() => navigate('/')}
