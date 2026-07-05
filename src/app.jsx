@@ -29,6 +29,7 @@ import AdminDashboardGeneral from './pages/Admin/AdminDashboardGeneral';
 // ==========================================
 // UTILERÍA: RESTAURADOR DE SCROLL
 // ==========================================
+
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -101,11 +102,8 @@ const RutaProtegida = ({ children, rolPermitido }) => {
   return children;
 };
  
-const { data, error } = await supabase
-  .from('viajes_diarios')
-  .select('id, destino, estatus, fecha') // Solo trae las columnas que necesitas
-  .limit(100);
-
+const { data, error } = await supabase.from("viajes_diarios").select("*").limit(100);
+  
 export default function App() {
   return (
     <HashRouter>
