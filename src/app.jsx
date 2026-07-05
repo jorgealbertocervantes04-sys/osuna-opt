@@ -1,7 +1,7 @@
 import { supabase } from "./services/supabaseClient";
 import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import logotrayecto from "./assets/logo-trayecto.png";
+
 
 // --- IMPORTACIONES DE LA APP MÓVIL ---
 import OperadorLayout from './pages/Operador/OperadorLayout';
