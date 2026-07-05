@@ -68,48 +68,33 @@ export default function LoginAdmin() {
         </button>
       </div>
     </div>
-    );
-// Función de diagnóstico para el login de Administrador
-async function loginAdminDiagnostico(correo, contrasena) {
-  try {
-    console.log("1. Iniciando login para el correo:", correo);
+  );
+}
 
-    // Buscamos al usuario solo por correo primero para ver si existe
-    const { data: usuario, error: errorUsuario } = await supabase
+  try {
+    // 1. Buscamos al usuario por su nombre completo
+    const { data: adminData, error } = await supabase
       .from('usuarios')
       .select('*')
-      .eq('correo', correo)
+      .eq('nombre_completo', identificador)
       .maybeSingle();
 
-    if (errorUsuario) {
-      console.error("Error en la base de datos:", errorUsuario.message);
-      throw new Error("Falla en la conexión con la base de datos.");
+    if (error) throw error;
+    if (!adminData) throw new Error("Usuario no encontrado en la base de datos.");
+
+    // 2. Verificamos la contraseña
+    if (adminData.contrasena !== contrasena) {
+      throw new Error("Contraseña incorrecta.");
     }
 
-    if (!usuario) {
-      console.warn("2. El correo no existe en la base de datos.");
-      throw new Error("Usuario no encontrado.");
+    // 3. Verificamos el rol (Aceptamos "Administración" o "Admin")
+    if (adminData.rol !== 'Administración' && adminData.rol !== 'Admin') {
+      throw new Error(`No tienes permisos. Tu rol actual es: ${adminData.rol}`);
     }
 
-    console.log("3. Usuario encontrado. Rol actual en DB:", usuario.rol);
+    // 4. ¡Éxito!
+    return { exito: true, datos: adminData };
 
-    // Verificamos el rol (Ajusta 'Admin' por el rol exacto que uses en tu tabla)
-    if (usuario.rol !== 'Admin' && usuario.rol !== 'Administración') {
-      console.warn("4. El usuario no tiene privilegios de administrador.");
-      throw new Error("No tienes permisos para entrar aquí.");
-    }
-
-    // Verificamos la contraseña
-    if (usuario.contrasena !== contrasena) {
-      console.warn("5. La contraseña es incorrecta.");
-      throw new Error("Credenciales incorrectas.");
-    }
-
-    console.log("6. ¡Login exitoso!");
-    return { exito: true, datos: usuario };
-
-  } catch (error) {
-    return { exito: false, mensaje: error.message };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
   }
-}
-}
