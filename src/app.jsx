@@ -101,10 +101,18 @@ const RutaProtegida = ({ children, rolPermitido }) => {
 
   return children;
 };
+  const { data, error } = await supabase
+  .from('viajes_diarios')
+  .select('*')
+  .limit(100); // Solo descarga los primeros 100 registros
+  // Ejemplo: Obtener solo los viajes desde una fecha específica
+const fechaInicio = '2026-07-01T00:00:00.000Z'; 
 
-// ==========================================
-// ENRUTADOR MAESTRO
-// ==========================================
+const { data, error } = await supabase
+  .from('viajes_diarios')
+  .select('id, destino, estatus, fecha') // Solo trae las columnas que necesitas
+  .limit(100);
+
 export default function App() {
   return (
     <HashRouter>
