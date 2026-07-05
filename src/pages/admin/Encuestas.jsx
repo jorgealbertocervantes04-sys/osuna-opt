@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { dataService } from '../../../vite.config';
+import { dataService } from '../../services/dataService';
 
 export default function Encuestas() {
   const [encuestas, setEncuestas] = useState([]);

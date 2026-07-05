@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { dataService } from '../../../vite.config';
+import { dataService } from '../../services/dataService';
 
 export default function Viajes() {
   const [viajes, setViajes] = useState([]);
