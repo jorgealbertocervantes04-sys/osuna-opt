@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { dataService } from '../../services/dataService';
+import { dataService } from '../../../vite.config';
 
 export default function Academia() {
   const { filtrosGlobales } = useOutletContext(); // Por si quieres filtrar los resultados

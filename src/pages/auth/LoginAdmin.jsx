@@ -21,7 +21,7 @@ export default function LoginAdmin() {
     if (resultado.exito) {
       navigate('/admin/dashboard'); // Redirige al panel si es exitoso
     } else {
-      setError(resultado.mensaje);
+      setErrorMsg(resultado.mensaje);
     }
     setCargando(false);
   };
@@ -31,7 +31,7 @@ export default function LoginAdmin() {
       <form onSubmit={handleSubmit} style={{ background: '#1e293b', padding: '40px', borderRadius: '12px', width: '100%', maxWidth: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
         <h2 style={{ color: '#fbbf24', textAlign: 'center', marginBottom: '20px' }}>UDAT Admin</h2>
         
-        {error && <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', padding: '10px', borderRadius: '6px', marginBottom: '15px', fontSize: '14px', textAlign: 'center' }}>{error}</div>}
+        {errorMsg && <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', padding: '10px', borderRadius: '6px', marginBottom: '15px', fontSize: '14px', textAlign: 'center' }}>{errorMsg}</div>}
 
         <label style={{ color: '#94a3b8', display: 'block', marginBottom: '5px', fontSize: '14px' }}>Correo Electrónico</label>
         <input 

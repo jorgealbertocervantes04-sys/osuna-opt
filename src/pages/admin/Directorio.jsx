@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { dataService } from '../../services/dataService'; // Tu servicio profesional
+import { dataService } from '../../../vite.config';
 
 export default function Directorio() {
   // 1. ATRAPAMOS LOS FILTROS GLOBALES DEL MENÚ IZQUIERDO

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { dataService } from '../../services/dataService';
+import { dataService } from '../../../vite.config';
 import { solicitarAnalisisDeRiesgo } from '../../services/aiService'; // Integración de la IA
 
 export default function Cardex() {
