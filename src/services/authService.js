@@ -1,82 +1,45 @@
 import { supabase } from './supabaseClient';
 
 export const authService = {
-  // 1. Verificar celular (Para Alumnos y Tutores)
-  async verificarCelular(telefono) {
+  // LOGIN ADMIN CON CORREO
+  async loginAdmin(email, password) {
     try {
-      const { data, error } = await supabase
+      // 1. Intentar iniciar sesión en Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+
+      if (authError) throw authError;
+
+      // 2. Verificar que el usuario tenga el rol 'Admin' en la tabla 'usuarios'
+      const { data: perfil, error: perfilError } = await supabase
         .from('usuarios')
         .select('*')
-        .eq('telefono', telefono)
-        .maybeSingle();
-      
-      if (error) throw error;
-      if (!data) throw new Error('Número celular no autorizado en UDAT.');
-      
-      return { exito: true, datos: data };
-    } catch (error) {
-      return { exito: false, mensaje: error.message };
-    }
-  },
-
-  // 2. Activar cuenta nueva (Actualiza los datos del usuario)
-  async activarCuenta(id, datosActualizados) {
-    try {
-      const { error } = await supabase
-        .from('usuarios')
-        .update(datosActualizados)
-        .eq('id', id);
-
-      if (error) throw error;
-      return { exito: true };
-    } catch (error) {
-      return { exito: false, mensaje: error.message };
-    }
-  },
-
-  // 3. Validar credenciales (Login Admin)
-  async loginAdmin(nombreUsuario, password) {
-    try {
-      // Modificamos la búsqueda para localizar la columna correcta
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('nombre_completo', nombreUsuario)
+        .eq('id', authData.user.id)
+        .eq('rol', 'Admin')
         .maybeSingle();
 
-      if (error) throw error;
+      if (perfilError) throw perfilError;
       
-      if (!data) {
-        throw new Error('Usuario no encontrado en la base de datos.');
+      if (!perfil) {
+        // Si no es admin, cerramos la sesión por seguridad
+        await supabase.auth.signOut();
+        throw new Error('No tienes permisos de administrador.');
       }
 
-      if (data.contrasena !== password) {
-        throw new Error('Contraseña incorrecta.');
-      }
+      // 3. Guardar la sesión localmente
+      localStorage.setItem('udat_admin_session', JSON.stringify(perfil));
+      return { exito: true, datos: perfil };
 
-      // Validamos los permisos precisos
-      if (data.rol !== 'Administración' && data.rol !== 'Admin') {
-        throw new Error('No tienes privilegios de administrador.');
-      }
-
-      return { exito: true, datos: data };
     } catch (error) {
+      console.error("Error en loginAdmin:", error.message);
       return { exito: false, mensaje: error.message };
     }
   },
 
-  // 4. Cambiar contraseña
-  async cambiarPassword(id, nuevaPass) {
-    try {
-      const { error } = await supabase
-        .from('usuarios')
-        .update({ contrasena: nuevaPass })
-        .eq('id', id);
-
-      if (error) throw error;
-      return { exito: true };
-    } catch (error) {
-      return { exito: false, mensaje: error.message };
-    }
+  async logout() {
+    await supabase.auth.signOut();
+    localStorage.removeItem('udat_admin_session');
   }
 };

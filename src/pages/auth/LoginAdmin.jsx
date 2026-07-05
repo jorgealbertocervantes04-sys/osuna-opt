@@ -1,77 +1,64 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authService } from '../../services/authService';
+import { authService } from '../../services/authService'; // Ajusta la ruta si es necesario
 
 export default function LoginAdmin() {
-  // Ahora guardamos el nombre de usuario en lugar del correo
-  const [nombreUsuario, setNombreUsuario] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
 
-  const handleLogin = async () => {
-    // Validamos que los campos no estén vacíos
-    if (!nombreUsuario || !password) {
-      return setErrorMsg("Ingresa tu nombre completo y contraseña maestra.");
-    }
-    
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
     setCargando(true);
     setErrorMsg('');
 
-    // Llamamos a tu nuevo servicio pasándole el nombre y la contraseña
-    const { exito, datos, mensaje } = await authService.loginAdmin(nombreUsuario, password);
+    const resultado = await authService.loginAdmin(email, password);
 
-    if (exito) {
-      // Guardamos la sesión y redirigimos al dashboard
-      localStorage.setItem('udat_app_session', JSON.stringify(datos));
-      navigate('/admin');
+    if (resultado.exito) {
+      navigate('/admin/dashboard'); // Redirige al panel si es exitoso
     } else {
-      // Mostramos el error exacto que nos devuelva Supabase
-      setErrorMsg(mensaje);
-      setCargando(false);
+      setError(resultado.mensaje);
     }
+    setCargando(false);
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0f172a', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'system-ui, sans-serif', padding: '15px' }}>
-      <div style={{ background: '#1e293b', padding: '40px', borderRadius: '20px', width: '100%', maxWidth: '400px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.6)', border: '1px solid #334155', boxSizing: 'border-box' }}>
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#0f172a' }}>
+      <form onSubmit={handleSubmit} style={{ background: '#1e293b', padding: '40px', borderRadius: '12px', width: '100%', maxWidth: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+        <h2 style={{ color: '#fbbf24', textAlign: 'center', marginBottom: '20px' }}>UDAT Admin</h2>
         
-        <h1 style={{ margin: '0 0 5px 0', color: '#2563eb', fontWeight: 900, fontSize: '32px', letterSpacing: '1px' }}>Centro de Mando</h1>
-        <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '30px' }}>Acceso a Dirección de Operaciones</p>
-        
-        {errorMsg && <p style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', margin: '0 0 20px 0' }}>{errorMsg}</p>}
+        {error && <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', padding: '10px', borderRadius: '6px', marginBottom: '15px', fontSize: '14px', textAlign: 'center' }}>{error}</div>}
 
+        <label style={{ color: '#94a3b8', display: 'block', marginBottom: '5px', fontSize: '14px' }}>Correo Electrónico</label>
         <input 
-          type="text" 
-          placeholder="Nombre completo (Ej. Jorge Alberto...)" 
-          value={nombreUsuario}
-          onChange={(e) => setNombreUsuario(e.target.value)}
-          style={{ width: '100%', padding: '15px', marginBottom: '20px', border: '1px solid #475569', borderRadius: '10px', boxSizing: 'border-box', fontSize: '15px', background: '#0f172a', color: '#ffffff', outline: 'none' }}
+          type="email" 
+          required 
+          value={email} 
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ width: '100%', padding: '12px', marginBottom: '20px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: 'white', boxSizing: 'border-box' }}
         />
+
+        <label style={{ color: '#94a3b8', display: 'block', marginBottom: '5px', fontSize: '14px' }}>Contraseña</label>
         <input 
           type="password" 
-          placeholder="Contraseña maestra" 
-          value={password}
+          required 
+          value={password} 
           onChange={(e) => setPassword(e.target.value)}
-          style={{ width: '100%', padding: '15px', marginBottom: '25px', border: '1px solid #475569', borderRadius: '10px', boxSizing: 'border-box', fontSize: '15px', background: '#0f172a', color: '#ffffff', outline: 'none' }}
+          style={{ width: '100%', padding: '12px', marginBottom: '30px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: 'white', boxSizing: 'border-box' }}
         />
-        
-        <button 
-          onClick={handleLogin}
-          disabled={cargando}
-          style={{ width: '100%', padding: '16px', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '16px', cursor: cargando ? 'not-allowed' : 'pointer', transition: '0.3s', boxShadow: cargando ? 'none' : '0 4px 15px rgba(37, 99, 235, 0.4)', opacity: cargando ? 0.7 : 1 }}
-        >
-          {cargando ? 'Sincronizando bóveda...' : 'Ingresar a la Bóveda'}
-        </button>
 
         <button 
-          onClick={() => navigate('/')}
-          style={{ width: '100%', padding: '15px', background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '10px', fontSize: '14px', marginTop: '15px', cursor: 'pointer' }}
+          type="submit" 
+          disabled={cargando}
+          style={{ width: '100%', padding: '14px', background: '#fbbf24', color: '#0f172a', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}
         >
-          Volver al Portal
+          {cargando ? 'Iniciando sesión...' : 'Entrar al Centro de Mando'}
         </button>
-      </div>
+      </form>
     </div>
   );
 }
