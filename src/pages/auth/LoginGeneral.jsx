@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authService } from '../../services/authService';
+import { dataService } from "../../services/dataService";
 
-export default function LoginAdmin() {
+export default function LoginGeneral() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [cargando, setCargando] = useState(false);

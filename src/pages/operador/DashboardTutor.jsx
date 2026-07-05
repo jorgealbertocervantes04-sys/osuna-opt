@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { dataService } from '../../../vite.config';
+import { dataService } from "../../services/dataService";
 import { supabase } from '../../services/supabaseClient';
 
 export default function DashboardTutor() {

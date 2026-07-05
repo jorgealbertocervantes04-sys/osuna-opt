@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { dataService } from '../../../vite.config';
+import * as dataService from '../../services/dataService';
 
 export default function Academia() {
   const { filtrosGlobales } = useOutletContext(); // Por si quieres filtrar los resultados
@@ -22,9 +22,9 @@ export default function Academia() {
   const cargarDatos = async () => {
     setCargando(true);
     const [mats, exas, users] = await Promise.all([
-      dataService.obtenerMaterialEstudio(),
-      dataService.obtenerExamenes(),
-      dataService.obtenerUsuarios()
+      dataService.dataService.obtenerMaterialEstudio(),
+      dataService.dataService.obtenerExamenes(),
+      dataService.dataService.obtenerUsuarios()
     ]);
 
     setMateriales(mats);
@@ -57,7 +57,7 @@ export default function Academia() {
   const guardarMaterial = async () => {
     if(!formMat.titulo || !formMat.semana_asignada) return alert("Título y Semana obligatorios.");
     setGuardando(true);
-    const { exito, error } = await dataService.guardarMaterial(formMat);
+    const { exito, error } = await dataService.dataService.guardarMaterial(formMat);
     if(exito) { setModalMaterial(false); setFormMat({ semana_asignada:'', titulo:'', descripcion:'', url_documento_video:'' }); cargarDatos(); }
     else alert(error.message);
     setGuardando(false);
@@ -65,7 +65,7 @@ export default function Academia() {
 
   const borrarMaterial = async (id) => {
     if(window.confirm("¿Borrar material?")) {
-      await dataService.eliminarMaterial(id);
+      await dataService.dataService.eliminarMaterial(id);
       cargarDatos();
     }
   };
@@ -74,7 +74,7 @@ export default function Academia() {
     if(!formExa.id_alumno || !formExa.semana || !formExa.calificacion) return alert("Llena todos los campos.");
     setGuardando(true);
     const payload = { ...formExa, fecha_realizacion: new Date().toISOString() };
-    const { exito, error } = await dataService.guardarExamen(payload);
+    const { exito, error } = await dataService.dataService.guardarExamen(payload);
     if(exito) { setModalExamen(false); setFormExa({ id_alumno:'', semana:'', calificacion:'' }); cargarDatos(); }
     else alert(error.message);
     setGuardando(false);
