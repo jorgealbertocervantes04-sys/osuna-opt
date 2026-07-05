@@ -68,5 +68,48 @@ export default function LoginAdmin() {
         </button>
       </div>
     </div>
-  );
+    );
+// Función de diagnóstico para el login de Administrador
+async function loginAdminDiagnostico(correo, contrasena) {
+  try {
+    console.log("1. Iniciando login para el correo:", correo);
+
+    // Buscamos al usuario solo por correo primero para ver si existe
+    const { data: usuario, error: errorUsuario } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('correo', correo)
+      .maybeSingle();
+
+    if (errorUsuario) {
+      console.error("Error en la base de datos:", errorUsuario.message);
+      throw new Error("Falla en la conexión con la base de datos.");
+    }
+
+    if (!usuario) {
+      console.warn("2. El correo no existe en la base de datos.");
+      throw new Error("Usuario no encontrado.");
+    }
+
+    console.log("3. Usuario encontrado. Rol actual en DB:", usuario.rol);
+
+    // Verificamos el rol (Ajusta 'Admin' por el rol exacto que uses en tu tabla)
+    if (usuario.rol !== 'Admin' && usuario.rol !== 'Administración') {
+      console.warn("4. El usuario no tiene privilegios de administrador.");
+      throw new Error("No tienes permisos para entrar aquí.");
+    }
+
+    // Verificamos la contraseña
+    if (usuario.contrasena !== contrasena) {
+      console.warn("5. La contraseña es incorrecta.");
+      throw new Error("Credenciales incorrectas.");
+    }
+
+    console.log("6. ¡Login exitoso!");
+    return { exito: true, datos: usuario };
+
+  } catch (error) {
+    return { exito: false, mensaje: error.message };
+  }
+}
 }
