@@ -3,26 +3,31 @@ import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/authService';
 
 export default function LoginAdmin() {
-  const [email, setEmail] = useState('');
+  // Ahora guardamos el nombre de usuario en lugar del correo
+  const [nombreUsuario, setNombreUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [cargando, setCargando] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      return setErrorMsg("Ingresa tu correo y contraseña maestra.");
+    // Validamos que los campos no estén vacíos
+    if (!nombreUsuario || !password) {
+      return setErrorMsg("Ingresa tu nombre completo y contraseña maestra.");
     }
     
     setCargando(true);
     setErrorMsg('');
 
-    const { exito, datos, mensaje } = await authService.loginAdmin(email, password);
+    // Llamamos a tu nuevo servicio pasándole el nombre y la contraseña
+    const { exito, datos, mensaje } = await authService.loginAdmin(nombreUsuario, password);
 
     if (exito) {
-      localStorage.setItem('udat_app_session', JSON.stringify(datos)); // Unificado a una sola llave
+      // Guardamos la sesión y redirigimos al dashboard
+      localStorage.setItem('udat_app_session', JSON.stringify(datos));
       navigate('/admin');
     } else {
+      // Mostramos el error exacto que nos devuelva Supabase
       setErrorMsg(mensaje);
       setCargando(false);
     }
@@ -38,10 +43,10 @@ export default function LoginAdmin() {
         {errorMsg && <p style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', margin: '0 0 20px 0' }}>{errorMsg}</p>}
 
         <input 
-          type="email" 
-          placeholder="Correo corporativo" 
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          type="text" 
+          placeholder="Nombre completo (Ej. Jorge Alberto...)" 
+          value={nombreUsuario}
+          onChange={(e) => setNombreUsuario(e.target.value)}
           style={{ width: '100%', padding: '15px', marginBottom: '20px', border: '1px solid #475569', borderRadius: '10px', boxSizing: 'border-box', fontSize: '15px', background: '#0f172a', color: '#ffffff', outline: 'none' }}
         />
         <input 
@@ -70,31 +75,3 @@ export default function LoginAdmin() {
     </div>
   );
 }
-
-  try {
-    // 1. Buscamos al usuario por su nombre completo
-    const { data: adminData, error } = await supabase
-      .from('usuarios')
-      .select('*')
-      .eq('nombre_completo', identificador)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!adminData) throw new Error("Usuario no encontrado en la base de datos.");
-
-    // 2. Verificamos la contraseña
-    if (adminData.contrasena !== contrasena) {
-      throw new Error("Contraseña incorrecta.");
-    }
-
-    // 3. Verificamos el rol (Aceptamos "Administración" o "Admin")
-    if (adminData.rol !== 'Administración' && adminData.rol !== 'Admin') {
-      throw new Error(`No tienes permisos. Tu rol actual es: ${adminData.rol}`);
-    }
-
-    // 4. ¡Éxito!
-    return { exito: true, datos: adminData };
-
-  } catch (e) {
-    return { exito: false, mensaje: e.message };
-  }

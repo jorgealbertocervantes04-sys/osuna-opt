@@ -34,19 +34,29 @@ export const authService = {
     }
   },
 
-  // 3. Validar contraseña maestra (Login Admin)
-  async loginAdmin(correo, password) {
+  // 3. Validar credenciales (Login Admin)
+  async loginAdmin(nombreUsuario, password) {
     try {
+      // Modificamos la búsqueda para localizar la columna correcta
       const { data, error } = await supabase
         .from('usuarios')
         .select('*')
-        .eq('correo', correo)
-        .eq('rol', 'Admin')
+        .eq('nombre_completo', nombreUsuario)
         .maybeSingle();
 
       if (error) throw error;
-      if (!data || data.contrasena !== password) {
-        throw new Error('Credenciales incorrectas o sin privilegios de administrador.');
+      
+      if (!data) {
+        throw new Error('Usuario no encontrado en la base de datos.');
+      }
+
+      if (data.contrasena !== password) {
+        throw new Error('Contraseña incorrecta.');
+      }
+
+      // Validamos los permisos precisos
+      if (data.rol !== 'Administración' && data.rol !== 'Admin') {
+        throw new Error('No tienes privilegios de administrador.');
       }
 
       return { exito: true, datos: data };
@@ -70,14 +80,3 @@ export const authService = {
     }
   }
 };
-async function handleLogin() {
-  const user = await authService.login(credentials);
-  if (user.authenticated) {
-    // 1. Guardar token
-    localStorage.setItem('token', user.token);
-    // 2. Redirigir
-    router.push('/dashboard');
-  } else {
-    // Manejar error
-  }
-}
