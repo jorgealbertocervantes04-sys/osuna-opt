@@ -25,7 +25,7 @@ import Encuestas from './pages/Admin/Encuestas';
 // --- IMPORTACIONES DE LA VISTA DIRECTIVA ---
 import LoginGeneral from './pages/Auth/LoginGeneral';
 import AdminDashboardGeneral from './pages/Admin/AdminDashboardGeneral'; 
-
+<img src="/logo-trayecto.png" alt="Logo" />
 // ==========================================
 // UTILERÍA: RESTAURADOR DE SCROLL
 // ==========================================
