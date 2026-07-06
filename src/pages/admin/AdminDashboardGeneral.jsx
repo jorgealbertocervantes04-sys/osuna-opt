@@ -8,7 +8,7 @@ import {
   Users, Calendar, Clock, MapPin, Target, 
   AlertTriangle, Filter, ChevronDown, Activity, Truck, Database, ShieldAlert
 } from 'lucide-react';
-import { supabase } from '../../services/supabaseClient';
+import { supabase } from "../../services/supabaseClient";
 
 // ==========================================
 // COMPONENTES DE UI (Mantenidos de tu diseño)

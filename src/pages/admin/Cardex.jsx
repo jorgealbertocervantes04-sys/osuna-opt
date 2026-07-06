@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../../services/dataService';
 import { solicitarAnalisisDeRiesgo } from '../../services/aiService'; // Integración de la IA
-
+import { supabase } from "../../services/supabaseClient";
 export default function Cardex() {
   const [evaluaciones, setEvaluaciones] = useState([]);
   const [usuarios, setUsuarios] = useState([]);

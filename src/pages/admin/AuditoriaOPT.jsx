@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { dataService } from '../../services/dataService';
+import { supabase } from "../../services/supabaseClient";
 
 export default function AuditoriaOPT() {
   const [tutores, setTutores] = useState([]);
@@ -9,8 +9,8 @@ export default function AuditoriaOPT() {
   const cargarDatos = async () => {
     setCargando(true);
     const [datosUsuarios, datosEval] = await Promise.all([
-      dataService.obtenerUsuarios(),
-      dataService.obtenerEvaluaciones()
+      supabase.from('usuarios').select('*'),
+      supabase.from('evaluaciones').select('*')
     ]);
 
     // Filtrar solo tutores y calcular sus métricas

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { dataService } from '../../services/dataService';
-
+import { supabase } from "../../services/supabaseClient";
 export default function Viajes() {
   const [viajes, setViajes] = useState([]);
   const [cargando, setCargando] = useState(true);

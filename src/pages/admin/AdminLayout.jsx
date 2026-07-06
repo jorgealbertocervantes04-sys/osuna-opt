@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-// IMPORTANTE: Asegúrate de que esta ruta apunte a tu archivo real de Supabase
-import { supabase } from '../../services/supabaseClient';
+
+// IMPORTANTE: Ruta corregida con pasos hacia atrás (../../)
+import { supabase } from '../../services/supabaseClient'; 
 
 export default function AdminLayout() {
   const navigate = useNavigate();
@@ -213,7 +214,6 @@ export default function AdminLayout() {
       <div style={{ flexGrow: 1, padding: '35px', overflowY: 'auto', backgroundImage: 'radial-gradient(circle at top right, rgba(217,119,6,0.04), transparent 45%)' }}>
         
         {/* MAGIA DE REACT: Le pasamos los filtros a TODAS las pantallas de adentro */}
-        {/* Upgrade: Pasamos también 'limpiarFiltros' por si una vista interna quiere reiniciar los datos */}
         <Outlet context={{ filtrosGlobales, limpiarFiltros }} />
         
       </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authService } from 'src//services/authService'; // Ajusta la ruta si es necesario
+import { authService } from "../../services/authService";
+const { loginAdmin } = authService; // Ajusta la ruta si es necesario
 
 export default function LoginAdmin() {
   const [email, setEmail] = useState('');
@@ -16,7 +17,7 @@ export default function LoginAdmin() {
     setCargando(true);
     setErrorMsg('');
 
-    const resultado = await authService.loginAdmin(email, password);
+    const resultado = await loginAdmin(email, password);
 
     if (resultado.exito) {
       navigate('/admin/dashboard'); // Redirige al panel si es exitoso

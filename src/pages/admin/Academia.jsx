@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { dataService } from "src/pages/services/dataService";
+import { supabase } from "../../services/supabaseClient";
 
 export default function Academia() {
   const { filtrosGlobales } = useOutletContext(); // Por si quieres filtrar los resultados

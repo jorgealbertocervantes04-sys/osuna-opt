@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart, Line } from 'recharts';
 import { Database, Upload, ShieldAlert, Users, Truck, Activity, UserPlus, Clock, BookOpen, BarChart3, AlertCircle } from 'lucide-react';
-import { supabase } from 'src/páge/services/supabaseClient';
+import { supabase } from "../../services/supabaseClient";
 
 export default function AdminDashboard() {
   const [dbStatus, setDbStatus] = useState('Conectando a Red LARMEX...');
