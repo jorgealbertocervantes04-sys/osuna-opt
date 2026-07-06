@@ -25,7 +25,7 @@ import Encuestas from './pages/Admin/Encuestas';
 // --- IMPORTACIONES DE LA VISTA DIRECTIVA ---
 import LoginGeneral from './pages/Auth/LoginGeneral';
 import AdminDashboardGeneral from './pages/Admin/AdminDashboardGeneral'; 
-<img src="/logo-trayecto.png" alt="Logo" />
+
 // ==========================================
 // UTILERÍA: RESTAURADOR DE SCROLL
 // ==========================================
@@ -112,7 +112,7 @@ export default function App() {
       <Routes>
         {/* RUTA RAÍZ */}
         <Route path="/" element={<Portal />} />
-        
+        <img src="/logo-trayecto.png" alt="Logo" />         
         {/* LOGINS INDEPENDIENTES */}
         <Route path="/login-app" element={<LoginApp />} />
         <Route path="/admin-login" element={<LoginAdmin />} />
