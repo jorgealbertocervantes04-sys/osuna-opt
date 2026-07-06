@@ -1,10 +1,78 @@
 import { supabase } from './supabaseClient';
 
 export const dataService = {
-  obtenerUsuariosPorRol,
-  registrarViaje,
-  obtenerAvanceInduccion,
-  obtenerviajes(filtros = {}) {
+  
+  // ==========================================
+  // 1. OBTENER USUARIOS POR ROL
+  // ==========================================
+  async obtenerUsuariosPorRol(rol) {
+    try {
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('rol', rol)
+        .order('nombre_completo', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error(`Error obteniendo usuarios con rol ${rol}:`, error.message);
+      return [];
+    }
+  },
+
+  // ==========================================
+  // 2. REGISTRAR UN NUEVO VIAJE (OPT)
+  // ==========================================
+  async registrarViaje(datosViaje) {
+    try {
+      const { data, error } = await supabase
+        .from('viajes_diarios')
+        .insert([datosViaje])
+        .select();
+      if (error) throw error;
+      return { exito: true, data };
+    } catch (error) {
+      console.error("Error al registrar viaje:", error.message);
+      return { exito: false, error: error.message };
+    }
+  },
+
+  // ==========================================
+  // 3. OBTENER Y REGISTRAR AVANCES DE INDUCCIÓN
+  // ==========================================
+  async obtenerAvanceInduccion(id_alumno) {
+    try {
+      const { data, error } = await supabase
+        .from('registros_induccion')
+        .select('*')
+        .eq('id_alumno', id_alumno)
+        .order('fecha_registro', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error al obtener avance de inducción:", error.message);
+      return [];
+    }
+  },
+
+  async registrarAvanceInduccion(datosInduccion) {
+    try {
+      const { data, error } = await supabase
+        .from('registros_induccion')
+        .insert([datosInduccion])
+        .select();
+      if (error) throw error;
+      return { exito: true, data };
+    } catch (error) {
+      console.error("Error al registrar inducción:", error.message);
+      return { exito: false, error: error.message };
+    }
+  },
+
+  // ==========================================
+  // 4. OBTENER HISTORIAL DE VIAJES (Con filtros)
+  // ==========================================
+  async obtenerViajes(filtros = {}) {
     try {
       let query = supabase.from('viajes_diarios').select('*');
 
@@ -26,10 +94,9 @@ export const dataService = {
     }
   },
 
-  /**
-   * Obtiene los catálogos para los menús desplegables del panel.
-   * Corrección realizada: 'getentes' cambiado a 'gerentes'.
-   */
+  // ==========================================
+  // 5. OBTENER CATÁLOGOS (Menús desplegables)
+  // ==========================================
   async obtenerCatalogos() {
     try {
       const [resUni, resLid, resGer] = await Promise.all([
@@ -49,20 +116,35 @@ export const dataService = {
     }
   },
 
+  // ==========================================
+  // 6. GESTIÓN GENERAL DE USUARIOS
+  // ==========================================
   async obtenerUsuarios(filtros = {}) {
-    let query = supabase.from('usuarios').select('*');
-    if (filtros.rol) query = query.eq('rol', filtros.rol);
-    const { data } = await query.order('nombre_completo', { ascending: true });
-    return data || [];
+    try {
+      let query = supabase.from('usuarios').select('*');
+      if (filtros.rol) query = query.eq('rol', filtros.rol);
+      
+      const { data, error } = await query.order('nombre_completo', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error en obtenerUsuarios:", error.message);
+      return [];
+    }
   },
 
   async guardarUsuario(datos, id = null) {
-    if (id) {
-      const { error } = await supabase.from('usuarios').update(datos).eq('id', id);
-      return { exito: !error, error };
-    } else {
-      const { error } = await supabase.from('usuarios').insert([datos]);
-      return { exito: !error, error };
+    try {
+      if (id) {
+        const { error } = await supabase.from('usuarios').update(datos).eq('id', id);
+        return { exito: !error, error };
+      } else {
+        const { error } = await supabase.from('usuarios').insert([datos]);
+        return { exito: !error, error };
+      }
+    } catch (error) {
+      console.error("Error en guardarUsuario:", error.message);
+      return { exito: false, error: error.message };
     }
   }
 };
