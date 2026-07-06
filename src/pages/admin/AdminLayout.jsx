@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 // IMPORTANTE: Asegúrate de que esta ruta apunte a tu archivo real de Supabase
-import { supabase } from 'src/services/supabaseClient'; 
+import { supabase } from '../../services/supabaseClient';
 
 export default function AdminLayout() {
   const navigate = useNavigate();
