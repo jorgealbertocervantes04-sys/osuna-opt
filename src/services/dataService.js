@@ -4,15 +4,7 @@ export const dataService = {
   obtenerUsuariosPorRol,
   registrarViaje,
   obtenerAvanceInduccion,
-  // ... y todas las demás funciones que hayas creado aquí
-};
-
-export const dataService = {
-  /**
-   * Obtiene viajes con filtros dinámicos. 
-   * Si no hay filtros de fecha, aplica un rango de seguridad (paginación).
-   */
-  async obtenerViajes(filtros = {}) {
+  obtenerviajes(filtros = {}) {
     try {
       let query = supabase.from('viajes_diarios').select('*');
 
