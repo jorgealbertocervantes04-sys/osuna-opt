@@ -44,27 +44,47 @@ export const authService = {
   // ==========================================
   // 2. APP MÓVIL: VERIFICAR CELULAR OPERADOR
   // ==========================================
+ // ==========================================
+  // 2. APP MÓVIL: VERIFICAR CELULAR OPERADOR (Mejorado)
+  // ==========================================
   async verificarCelular(numeroCelular) {
     try {
-      const { data, error } = await supabase
+      // Limpiamos espacios en blanco que el usuario pueda escribir por error
+      const celularLimpio = String(numeroCelular).trim();
+
+      // Buscamos coincidencia exacta
+      let { data, error } = await supabase
         .from('usuarios')
         .select('*')
-        .eq('celular', numeroCelular)
+        .eq('celular', celularLimpio)
         .maybeSingle(); 
 
       if (error) throw error;
 
+      // SI NO LO ENCUENTRA CON 10 DÍGITOS:
+      // Hacemos un segundo intento buscando si en Supabase incluye el código de país (52)
+      if (!data) {
+        const intentoConPrefijo = `52${celularLimpio}`;
+        const { data: dataPrefijo, error: errorPrefijo } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('celular', intentoConPrefijo)
+          .maybeSingle();
+          
+        if (errorPrefijo) throw errorPrefijo;
+        data = dataPrefijo; // Si lo encuentra con 52, usamos ese usuario
+      }
+
       if (data) {
         return { exito: true, datos: data };
       } else {
-        return { exito: false, mensaje: "Este número no está registrado en el sistema." };
+        return { exito: false, mensaje: `El número ${celularLimpio} no coincide con ningún registro activo.` };
       }
     } catch (error) {
       console.error("Error al verificar celular:", error.message);
       return { exito: false, mensaje: "Error de conexión con la base de datos." };
     }
   },
-
   // ==========================================
   // 3. APP MÓVIL: ACTIVAR CUENTA (REGISTRO)
   // ==========================================
