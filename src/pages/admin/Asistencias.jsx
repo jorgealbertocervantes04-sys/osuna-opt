@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { dataService } from "../../services/supabaseClient";
+import { dataService } from "src/services/supabaseClient";
 
 // --- FUNCIONES PRESTABLECIDAS DE CONTROL DE FECHAS ---
 const getMonday = (d) => {

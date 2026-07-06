@@ -67,3 +67,11 @@ export const dataService = {
     }
   }
 };
+// ... todo el código de tus funciones de Supabase (obtenerViajes, registrarAvance, etc.)
+
+export const dataService = {
+  obtenerUsuariosPorRol,
+  registrarViaje,
+  obtenerAvanceInduccion,
+  // ... y todas las demás funciones que hayas creado aquí
+};
