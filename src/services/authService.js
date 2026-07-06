@@ -1,10 +1,11 @@
 import { supabase } from './supabaseClient';
 
 export const authService = {
-  // LOGIN ADMIN CON CORREO
+  // ==========================================
+  // 1. LOGIN DE ADMINISTRADORES
+  // ==========================================
   async loginAdmin(email, password) {
     try {
-      // 1. Intentar iniciar sesión en Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: email,
         password: password,
@@ -12,7 +13,6 @@ export const authService = {
 
       if (authError) throw authError;
 
-      // 2. Verificar que el usuario tenga el rol 'Admin' en la tabla 'usuarios'
       const { data: perfil, error: perfilError } = await supabase
         .from('usuarios')
         .select('*')
@@ -23,12 +23,10 @@ export const authService = {
       if (perfilError) throw perfilError;
       
       if (!perfil) {
-        // Si no es admin, cerramos la sesión por seguridad
         await supabase.auth.signOut();
         throw new Error('No tienes permisos de administrador.');
       }
 
-      // 3. Guardar la sesión localmente
       localStorage.setItem('udat_admin_session', JSON.stringify(perfil));
       return { exito: true, datos: perfil };
 
@@ -41,5 +39,49 @@ export const authService = {
   async logout() {
     await supabase.auth.signOut();
     localStorage.removeItem('udat_admin_session');
+  },
+
+  // ==========================================
+  // 2. APP MÓVIL: VERIFICAR CELULAR OPERADOR
+  // ==========================================
+  async verificarCelular(numeroCelular) {
+    try {
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('celular', numeroCelular)
+        .maybeSingle(); 
+
+      if (error) throw error;
+
+      if (data) {
+        return { exito: true, datos: data };
+      } else {
+        return { exito: false, mensaje: "Este número no está registrado en el sistema." };
+      }
+    } catch (error) {
+      console.error("Error al verificar celular:", error.message);
+      return { exito: false, mensaje: "Error de conexión con la base de datos." };
+    }
+  },
+
+  // ==========================================
+  // 3. APP MÓVIL: ACTIVAR CUENTA (REGISTRO)
+  // ==========================================
+  async activarCuenta(id, payload) {
+    try {
+      const { data, error } = await supabase
+        .from('usuarios')
+        .update(payload)
+        .eq('id', id)
+        .select();
+
+      if (error) throw error;
+      
+      return { exito: true, datos: data };
+    } catch (error) {
+      console.error("Error en activarCuenta:", error.message);
+      return { exito: false, mensaje: "No se pudo registrar la información." };
+    }
   }
 };
