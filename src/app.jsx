@@ -1,7 +1,8 @@
-import { supabase } from "./services/supabaseClient";
 import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 
+// IMPORTANTE: Asegúrate de importar tu logo si lo usas en este archivo
+import logotrayecto from "./logo-trayecto.png";
 
 // --- IMPORTACIONES DE LA APP MÓVIL ---
 import OperadorLayout from './pages/Operador/OperadorLayout';
@@ -29,7 +30,6 @@ import AdminDashboardGeneral from './pages/Admin/AdminDashboardGeneral';
 // ==========================================
 // UTILERÍA: RESTAURADOR DE SCROLL
 // ==========================================
-
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -83,7 +83,7 @@ const Portal = () => {
 };
 
 // ==========================================
-// CANDADO DIGITAL DE SEGURIDAD (RUTAS PROTEGIDAS)
+// CANDADO DIGITAL DE SEGURIDAD
 // ==========================================
 const RutaProtegida = ({ children, rolPermitido }) => {
   const session = localStorage.getItem('udat_app_session');
@@ -101,9 +101,10 @@ const RutaProtegida = ({ children, rolPermitido }) => {
 
   return children;
 };
- 
-const { data, error } = await supabase.from("viajes_diarios").select("*").limit(100);
-  
+
+// ==========================================
+// ENRUTADOR MAESTRO
+// ==========================================
 export default function App() {
   return (
     <HashRouter>
@@ -112,7 +113,7 @@ export default function App() {
       <Routes>
         {/* RUTA RAÍZ */}
         <Route path="/" element={<Portal />} />
-        <img src="/logo-trayecto.png" alt="Logo" />         
+        
         {/* LOGINS INDEPENDIENTES */}
         <Route path="/login-app" element={<LoginApp />} />
         <Route path="/admin-login" element={<LoginAdmin />} />

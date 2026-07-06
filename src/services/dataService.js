@@ -1,6 +1,13 @@
 import { supabase } from './supabaseClient';
 
 export const dataService = {
+  obtenerUsuariosPorRol,
+  registrarViaje,
+  obtenerAvanceInduccion,
+  // ... y todas las demás funciones que hayas creado aquí
+};
+
+export const dataService = {
   /**
    * Obtiene viajes con filtros dinámicos. 
    * Si no hay filtros de fecha, aplica un rango de seguridad (paginación).
@@ -66,12 +73,4 @@ export const dataService = {
       return { exito: !error, error };
     }
   }
-};
-// ... todo el código de tus funciones de Supabase (obtenerViajes, registrarAvance, etc.)
-
-export const dataService = {
-  obtenerUsuariosPorRol,
-  registrarViaje,
-  obtenerAvanceInduccion,
-  // ... y todas las demás funciones que hayas creado aquí
 };
