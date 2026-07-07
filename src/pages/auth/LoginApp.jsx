@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/authService';
-// IMPORTANTE: Importamos el dataService para traer los catálogos
 import { dataService } from '../../services/dataService'; 
 
 export default function LoginApp() {
@@ -14,16 +13,16 @@ export default function LoginApp() {
   const [errorMsg, setErrorMsg] = useState('');
   const [cargando, setCargando] = useState(false);
 
-  // Estados para el Registro (¡Agregamos tutor!)
+  // Estados para el Registro
   const [regData, setRegData] = useState({ generacion: '', nombre: '', empleado: '', empresa: '', unidad: '', lider: '', gerente: '', tutor: '' });
   const [esInduccion, setEsInduccion] = useState(false);
 
-  // ESTADO PARA GUARDAR LAS LISTAS DESPLEGABLES
+  // Estado para las Listas Desplegables
   const [catalogos, setCatalogos] = useState({ unidades: [], lideres: [], gerentes: [], tutores: [] });
 
   const navigate = useNavigate();
 
-  // EFECTO: CARGAR CATÁLOGOS CUANDO EL USUARIO LLEGA AL REGISTRO
+  // Cargar catálogos al llegar al paso de registro
   useEffect(() => {
     if (pasoActual === 'registro') {
       const cargarListas = async () => {
@@ -62,11 +61,7 @@ export default function LoginApp() {
     
     if (generacion && !/^G\d+$/.test(generacion.toUpperCase())) return setErrorMsg("Generación debe empezar con 'G' seguido de números.");
     if (!nombre || !empleado) return setErrorMsg('El Nombre y Número de Empleado son obligatorios.');
-    
-    // Validación actualizada para requerir tutor
-    if (!esInduccion && (!empresa || !unidad || !lider || !gerente || !tutor)) {
-      return setErrorMsg('Llena tu info de ruta, o marca la casilla de Inducción.');
-    }
+    if (!esInduccion && (!empresa || !unidad || !lider || !gerente || !tutor)) return setErrorMsg('Llena tu info de ruta completa, o marca la casilla de Inducción.');
 
     setCargando(true);
     setErrorMsg('');
@@ -81,7 +76,7 @@ export default function LoginApp() {
       unidad_negocio: esInduccion ? '' : unidad,
       lider: esInduccion ? '' : lider,
       gerente: esInduccion ? '' : gerente,
-      tutor: esInduccion ? '' : tutor, // Guardamos al tutor en la base de datos
+      tutor: esInduccion ? '' : tutor,
       contrasena: pwdGenerada,
       fecha_registro: new Date().toISOString()
     };
@@ -116,9 +111,9 @@ export default function LoginApp() {
 
   const handleRegChange = (e) => setRegData({ ...regData, [e.target.name]: e.target.value });
 
-  // ESTILOS VISUALES OSCUROS DE ALTO CONTRASTE
+  // ESTILOS VISUALES
   const inputStyle = { width: '100%', padding: '14px', marginBottom: '20px', borderRadius: '10px', border: '1px solid #475569', background: '#0f172a', color: '#ffffff', textAlign: 'center', fontSize: '16px', boxSizing: 'border-box', outline: 'none' };
-  const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'auto' }; // Estilo especial para los menús
+  const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'auto' }; 
   const btnStyle = { width: '100%', padding: '16px', background: '#0ea5e9', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: 800, cursor: cargando ? 'not-allowed' : 'pointer', boxShadow: cargando ? 'none' : '0 4px 15px rgba(14, 165, 233, 0.4)', opacity: cargando ? 0.7 : 1, transition: '0.3s' };
 
   return (
@@ -177,12 +172,12 @@ export default function LoginApp() {
 
                 <select name="gerente" value={regData.gerente} onChange={handleRegChange} style={selectStyle}>
                   <option value="">Selecciona tu Gerente...</option>
-                  {catalogos.gerentes.map((g, i) => <option key={i} value={g.nombre_completo}>{g.nombre_completo}</option>)}
+                  {catalogos.gerentes.map((g, i) => <option key={i} value={g.nombre}>{g.nombre}</option>)}
                 </select>
 
                 <select name="tutor" value={regData.tutor} onChange={handleRegChange} style={selectStyle}>
                   <option value="">Selecciona tu Tutor (OPT)...</option>
-                  {catalogos.tutores.map((t, i) => <option key={i} value={t.nombre_completo}>{t.nombre_completo}</option>)}
+                  {catalogos.tutores.map((t, i) => <option key={i} value={t.nombre}>{t.nombre}</option>)}
                 </select>
               </>
             )}

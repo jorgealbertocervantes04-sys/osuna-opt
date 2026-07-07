@@ -94,8 +94,7 @@ export const dataService = {
     }
   },
 
-
- // ==========================================
+  // ==========================================
   // 5. OBTENER CATÁLOGOS (Menús desplegables)
   // ==========================================
   async obtenerCatalogos() {
@@ -103,21 +102,22 @@ export const dataService = {
       const [resUni, resLid, resGer, resTut] = await Promise.all([
         supabase.from('cat_unidades').select('nombre'),
         supabase.from('cat_lideres').select('nombre'),
-        supabase.from('usuarios').select('nombre_completo').eq('rol', 'Gerente'),
-        supabase.from('usuarios').select('nombre_completo').eq('rol', 'Tutor') // <--- ¡Nueva línea para tutores!
+        supabase.from('cat_Gerentes').select('nombre'), 
+        supabase.from('cat_tutores').select('nombre') 
       ]);
 
       return {
         unidades: resUni.data || [],
         lideres: resLid.data || [],
         gerentes: resGer.data || [],
-        tutores: resTut.data || [] // <--- ¡Lo empaquetamos aquí!
+        tutores: resTut.data || [] 
       };
     } catch (error) {
       console.error("Error cargando catálogos:", error);
       return { unidades: [], lideres: [], gerentes: [], tutores: [] };
     }
   },
+
   // ==========================================
   // 6. GESTIÓN GENERAL DE USUARIOS
   // ==========================================
@@ -155,7 +155,6 @@ export const dataService = {
   // ==========================================
   async obtenerMaterialEstudio() {
     try {
-      // Intenta traer los datos de una tabla llamada material_estudio
       const { data, error } = await supabase
         .from('material_estudio')
         .select('*');
@@ -164,7 +163,6 @@ export const dataService = {
       return data || [];
     } catch (error) {
       console.error("Error en obtenerMaterialEstudio:", error.message);
-      // Retornamos un arreglo vacío para que la pantalla no se rompa
       return []; 
     }
   }
