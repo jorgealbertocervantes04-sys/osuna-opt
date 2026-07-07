@@ -70,7 +70,7 @@ export const dataService = {
   },
 
   // ==========================================
-  // 4. OBTENER HISTORIAL DE VIAJES (Con filtros)
+  // 4. OBTENER HISTORIAL DE VIAJES (Filtros Generales)
   // ==========================================
   async obtenerViajes(filtros = {}) {
     try {
@@ -80,7 +80,7 @@ export const dataService = {
       if (filtros.hasta) query = query.lte('hora_inicio', filtros.hasta);
       if (filtros.id_operador) query = query.eq('id_operador', filtros.id_operador);
 
-      // Paginación de seguridad para evitar Error 500 o Timeouts
+      // Paginación de seguridad para evitar Error 500 o Timeouts en cargas masivas
       if (!filtros.desde && !filtros.hasta && !filtros.sinLimite) {
         query = query.range(0, 49); // Trae los 50 registros más recientes
       }
@@ -90,6 +90,25 @@ export const dataService = {
       return data || [];
     } catch (error) {
       console.error("Error en obtenerViajes:", error.message);
+      return [];
+    }
+  },
+
+  // ==========================================
+  // 4.1. OBTENER VIAJES ESPECÍFICOS POR ALUMNO (Anti-Timeout)
+  // ==========================================
+  async obtenerViajesPorAlumno(id_alumno) {
+    try {
+      const { data, error } = await supabase
+        .from('viajes_diarios')
+        .select('*')
+        .eq('id_alumno', id_alumno)
+        .order('hora_inicio', { ascending: false });
+        
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error obteniendo viajes del alumno:", error.message);
       return [];
     }
   },

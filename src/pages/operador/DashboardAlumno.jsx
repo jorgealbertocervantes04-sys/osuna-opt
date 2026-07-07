@@ -21,6 +21,15 @@ export default function DashboardAlumno() {
   const [mostrarModalActualizacion, setMostrarModalActualizacion] = useState(false);
   const [formActualizacion, setFormActualizacion] = useState({ unidad_negocio: '', lider: '', gerente: '', tutor: '' });
 
+  // En tu DashboardAlumno.js
+const [misViajes, todosUsuarios, todosMateriales, catalogos] = await Promise.all([
+  dataService.obtenerViajesPorAlumno(user.id), // <--- Utiliza la nueva función y le pasas el ID
+  dataService.obtenerUsuarios(),
+  dataService.obtenerMaterialEstudio(),
+  dataService.obtenerCatalogos()
+]);
+
+setViajes(misViajes);
   // ==========================================
   // ESTADOS RUTA OPT
   // ==========================================
