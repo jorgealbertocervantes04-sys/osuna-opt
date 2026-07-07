@@ -17,7 +17,7 @@ export default function DashboardAlumno() {
   const [temaInduccion, setTemaInduccion] = useState('');
   const [duracionInduccion, setDuracionInduccion] = useState('');
 
-  // Formulario Selección OPT (¡Corregido 'tutor_opt' a 'tutor' para que coincida con tu BD!)
+  // Formulario Selección OPT
   const [mostrarModalActualizacion, setMostrarModalActualizacion] = useState(false);
   const [formActualizacion, setFormActualizacion] = useState({ unidad_negocio: '', lider: '', gerente: '', tutor: '' });
 
@@ -162,7 +162,6 @@ export default function DashboardAlumno() {
     } catch(err) { alert("Error al finalizar etapa: " + err.message); }
   };
 
-  // 🔥 AQUÍ SE SOLUCIONÓ EL ERROR id=eq.null (CONEXIÓN DIRECTA Y SEGURA) 🔥
   const guardarActualizacionPerfil = async () => {
     if (!formActualizacion.unidad_negocio || !formActualizacion.lider || !formActualizacion.gerente) {
       return alert("Unidad, Líder y Gerente son obligatorios. (El Tutor puede quedar vacío).");
@@ -207,7 +206,6 @@ export default function DashboardAlumno() {
             actividad_sin_manejo: manejaHoy === 'NO' ? actividadSinManejo : null,
             fecha_hora: new Date().toISOString()
           };
-          // Conexión Directa
           const { error } = await supabase.from('asistencias').insert([payload]);
           if(!error) {
             setAsistenciaEnviada(true);
@@ -243,7 +241,6 @@ export default function DashboardAlumno() {
         hora_inicio: new Date().toISOString()
       };
       
-      // Conexión Directa para asegurar la creación de la ruta
       const { data, error } = await supabase.from('viajes_diarios').insert([payload]).select();
       
       if (!error && data && data.length > 0) {
@@ -290,7 +287,6 @@ export default function DashboardAlumno() {
         foto_odometro_url: urlFotoPublica
       };
 
-      // Conexión Directa para cerrar el viaje
       const { error: dbError } = await supabase.from('viajes_diarios').update(payload).eq('id', idViajeActivo);
       if (!dbError) {
         alert(`✓ ¡Reporte Enviado!\nRecorriste: ${kmRecorridos} KM.\nTu imagen se guardó en el Storage.`);
@@ -315,7 +311,6 @@ export default function DashboardAlumno() {
         calificacion_general: parseInt(encuestaEstrellas), comentarios: encuestaComentarios,
         fecha_creacion: new Date().toISOString()
       };
-      // Conexión Directa
       const { error } = await supabase.from('encuestas').insert([payload]);
       if (!error) {
         alert("✓ Tu reporte 360 fue enviado de manera anónima a corporativo.");
@@ -331,10 +326,20 @@ export default function DashboardAlumno() {
 
   let kmRestantesVisuales = kmTotales;
 
+  // LÓGICA DE VENCIMIENTO DEL ALUMNO
+  let diasDesdeEntrega = 0;
+  let diasAtrasoCertificacion = 0;
+  if (usuarioActual && (usuarioActual.fecha_entrega_operacion || usuarioActual.fecha_inicio_opt)) {
+      const fechaInicioReal = usuarioActual.fecha_entrega_operacion || usuarioActual.fecha_inicio_opt;
+      diasDesdeEntrega = Math.floor((new Date().getTime() - new Date(fechaInicioReal).getTime()) / (1000 * 60 * 60 * 24));
+      if (diasDesdeEntrega >= 56 && etapaActual !== 'Certificado') {
+        diasAtrasoCertificacion = diasDesdeEntrega - 56;
+      }
+  }
+
   return (
     <div style={{ padding: '20px', color: '#e2e8f0', fontFamily: 'system-ui' }}>
       
-      {/* CABECERA GENERAL */}
       <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #334155', paddingBottom: '15px', marginBottom: '20px' }}>
         <div>
           <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 'bold', textTransform: 'uppercase' }}>ESTATUS: {etapaActual}</span>
@@ -343,9 +348,6 @@ export default function DashboardAlumno() {
         <button onClick={() => { localStorage.removeItem('udat_app_session'); navigate('/app'); }} style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '8px', padding: '5px 15px', cursor: 'pointer', fontWeight: 'bold' }}>Salir</button>
       </div>
 
-      {/* ==========================================
-          VISTA 1: PRUEBA INTERMEDIA
-      ========================================== */}
       {etapaActual === 'Prueba Intermedia' && (
           <div style={{ background: '#1e293b', padding: '30px', borderRadius: '12px', textAlign: 'center', border: '1px solid #334155' }}>
               <h3 style={{ color: '#f8fafc', marginTop: 0 }}>📋 Registro de Prueba Intermedia</h3>
@@ -366,9 +368,6 @@ export default function DashboardAlumno() {
           </div>
       )}
 
-      {/* ==========================================
-          VISTA 2: INDUCCIÓN TEÓRICA
-      ========================================== */}
       {etapaActual === 'Induccion' && (
           <div>
             <div style={{ background: '#0284c7', padding: '15px', borderRadius: '12px', marginBottom: '20px', color: '#fff', boxShadow: '0 4px 10px rgba(2, 132, 199, 0.3)' }}>
@@ -393,9 +392,6 @@ export default function DashboardAlumno() {
           </div>
       )}
 
-      {/* ==========================================
-          VISTA 3: OPERADOR EN PRÁCTICA (OPT)
-      ========================================== */}
       {etapaActual === 'OPT' && (
         <>
             {mostrarModalActualizacion && (
@@ -427,7 +423,6 @@ export default function DashboardAlumno() {
                 </div>
             )}
 
-            {/* BARRA DE EXPERIENCIA (XP) */}
             <div style={{ background: '#1e293b', padding: '15px', borderRadius: '12px', marginBottom: '20px', border: '1px solid #334155' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}>
                 <span>Nivel de Desempeño: <strong>{xpInfo.nivel}</strong></span>
@@ -438,14 +433,12 @@ export default function DashboardAlumno() {
                 </div>
             </div>
 
-            {/* PESTAÑAS DE NAVEGACIÓN OPT */}
             <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
                 <button onClick={() => setActiveTab('operacion')} style={{ flex: 1, padding: '12px', borderRadius: '8px', background: activeTab === 'operacion' ? '#0284c7' : '#1e293b', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>📍 Operación</button>
                 <button onClick={() => setActiveTab('avance')} style={{ flex: 1, padding: '12px', borderRadius: '8px', background: activeTab === 'avance' ? '#0284c7' : '#1e293b', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>🏆 8 Semanas</button>
                 <button onClick={() => setActiveTab('academia')} style={{ flex: 1, padding: '12px', borderRadius: '8px', background: activeTab === 'academia' ? '#0284c7' : '#1e293b', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>📚 360 y PPTs</button>
             </div>
 
-            {/* TAB OPERACIÓN (GPS Y STORAGE) */}
             {activeTab === 'operacion' && (
                 <div style={{ animation: 'fadeIn 0.3s' }}>
                   <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', marginBottom: '20px' }}>
@@ -502,10 +495,18 @@ export default function DashboardAlumno() {
                 </div>
             )}
 
-            {/* TAB 8 SEMANAS */}
             {activeTab === 'avance' && (
               <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', animation: 'fadeIn 0.3s' }}>
                 <h3 style={{ marginTop: 0, borderBottom: '1px solid #334155', paddingBottom: '10px' }}>Avance Escalonado de Metas</h3>
+                
+                {/* BANNER DE VENCIMIENTO DE CERTIFICACIÓN */}
+                {diasAtrasoCertificacion > 0 && (
+                  <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', padding: '15px', borderRadius: '8px', marginBottom: '20px', color: '#fca5a5' }}>
+                    <h4 style={{ margin: '0 0 5px 0', color: '#ef4444' }}>⚠️ TIEMPO DE PRUEBA EXCEDIDO</h4>
+                    <p style={{ margin: 0, fontSize: '13px' }}>Tus 8 semanas de operación han concluido. Tienes un atraso de <strong>{diasAtrasoCertificacion} días</strong> para finalizar tu certificación oficial. Contacta inmediatamente a tu Gerente ({usuarioActual?.gerente}) o Líder Asignado.</p>
+                  </div>
+                )}
+
                 {metasUDAT.map((m, idx) => {
                   const kmEstaSemana = Math.min(kmRestantesVisuales, m.km);
                   kmRestantesVisuales = Math.max(0, kmRestantesVisuales - kmEstaSemana);
@@ -526,7 +527,6 @@ export default function DashboardAlumno() {
               </div>
             )}
 
-            {/* TAB ACADEMIA Y ENCUESTA 360 */}
             {activeTab === 'academia' && (
               <div style={{ animation: 'fadeIn 0.3s' }}>
                 <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', marginBottom: '20px' }}>

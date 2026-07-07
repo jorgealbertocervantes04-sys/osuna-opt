@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart, Line } from 'recharts';
-import { Database, Upload, ShieldAlert, Users, Truck, Activity, UserPlus, Clock, BookOpen, BarChart3, AlertCircle } from 'lucide-react';
+import { Database, Upload, ShieldAlert, Users, Truck, Activity, UserPlus, Clock, BookOpen, BarChart3, AlertCircle, MapPin, Target } from 'lucide-react';
 import { supabase } from "../../services/supabaseClient";
 
 export default function AdminDashboard() {
@@ -10,7 +10,7 @@ export default function AdminDashboard() {
   const [subiendo, setSubiendo] = useState(false);
 
   // Pestaña Activa de la Torre de Control
-  const [pestañaActiva, setPestañaActiva] = useState('general'); // 'general', 'metas', 'altas', 'induccion', 'biblioteca'
+  const [pestañaActiva, setPestañaActiva] = useState('general');
 
   // Estados de Datos de Supabase
   const [usuarios, setUsuarios] = useState([]);
@@ -23,13 +23,13 @@ export default function AdminDashboard() {
   const [filtroGeneracion, setFiltroGeneracion] = useState('ALL');
   const [filtroGerente, setFiltroGerente] = useState('ALL');
 
-  // Formularios de Altas Corporativas (NUEVO)
-  const [tipoAlta, setTipoAlta] = useState('Alumno'); // Alumno, Lider, Gerente, Staff, UN
+  // Formularios de Altas Corporativas
+  const [tipoAlta, setTipoAlta] = useState('Alumno');
   const [formAlumno, setFormAlumno] = useState({ matricula: '', nombre_completo: '', celular: '', generacion: '', fecha_entrega_empresa: '' });
   const [formPersonal, setFormPersonal] = useState({ nombre_completo: '', rol: 'Lider', unidad_negocio: '' });
   const [formUN, setFormUN] = useState({ nombre_unidad: '' });
 
-  // Formulario de Biblioteca (Se mantiene intacto)
+  // Formulario de Biblioteca
   const [tituloMaterial, setTituloMaterial] = useState('');
   const [descMaterial, setDescMaterial] = useState('');
   const [urlMaterial, setUrlMaterial] = useState('');
@@ -66,7 +66,7 @@ export default function AdminDashboard() {
   }, []);
 
   // ==========================================
-  // MANEJADORES DE ALTAS (NUEVA SECCIÓN REQUERIDA)
+  // MANEJADORES DE ALTAS
   // ==========================================
   const ejecutarAltaCorporativa = async (e) => {
     e.preventDefault();
@@ -83,9 +83,9 @@ export default function AdminDashboard() {
           nombre_completo: formAlumno.nombre_completo,
           telefono: formAlumno.celular,
           generacion: formAlumno.generacion,
-          created_at: new Date(formAlumno.fecha_entrega_empresa).toISOString(), // Fecha de entrega a empresa
+          fecha_entrega_operacion: new Date(formAlumno.fecha_entrega_empresa).toISOString(), // Nuevo campo oficial
           rol: 'Alumno',
-          etapa_actual: 'Prueba Intermedia', // Inicia siempre en Prueba Intermedia
+          etapa_actual: 'Prueba Intermedia',
           estatus: 'En proceso'
         };
       } else if (tipoAlta === 'UN') {
@@ -96,7 +96,6 @@ export default function AdminDashboard() {
         payload = { nombre_completo: formPersonal.nombre_completo, rol: formPersonal.rol, unidad_negocio: formPersonal.unidad_negocio };
       }
 
-      // Inserción en la tabla correspondiente de Supabase
       const tablaDestino = tipoAlta === 'UN' ? 'catalogos_unidades' : 'usuarios';
       const { error } = await supabase.from(tablaDestino).insert([payload]);
 
@@ -105,7 +104,7 @@ export default function AdminDashboard() {
         setFormAlumno({ matricula: '', nombre_completo: '', celular: '', generacion: '', fecha_entrega_empresa: '' });
         setFormPersonal({ nombre_completo: '', rol: 'Lider', unidad_negocio: '' });
         setFormUN({ nombre_unidad: '' });
-        extraerInformacionSupabase(); // Recargar datos
+        extraerInformacionSupabase(); 
       } else {
         alert("Error en inserción: " + error.message);
       }
@@ -141,17 +140,15 @@ export default function AdminDashboard() {
       const minsTotales = misViajes.reduce((sum, v) => sum + (v.tiempo_total_minutos || 0), 0);
       kmGlobales += kmTotales;
 
-      // Cálculo exacto de días sin OPT asignado (se refleja en Líder y Gerente)
       let diasSinOPT = 0;
       if (!alumno.lider || !alumno.gerente || !alumno.tutor_opt) {
         const inicio = alumno.created_at ? new Date(alumno.created_at) : new Date();
         diasSinOPT = Math.max(0, Math.floor((new Date().getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
       }
 
-      // Cálculo de días sin registros / sin manejar
+      // Cálculo de Tiempos Muertos
       let diasSinManejar = 0;
       if (misViajes.length > 0) {
-        // Encontrar la fecha del último viaje diario
         const fechas = misViajes.map(v => new Date(v.hora_inicio || v.fecha_hora || Date.now()).getTime());
         const ultimoViaje = Math.max(...fechas);
         diasSinManejar = Math.max(0, Math.floor((new Date().getTime() - ultimoViaje) / (1000 * 60 * 60 * 24)));
@@ -160,26 +157,44 @@ export default function AdminDashboard() {
         diasSinManejar = Math.max(0, Math.floor((new Date().getTime() - inicioOPT.getTime()) / (1000 * 60 * 60 * 24)));
       }
 
+      // MOTOR DE CERTIFICACIÓN (8 SEMANAS / 56 DÍAS)
+      const fechaInicioReal = alumno.fecha_entrega_operacion || alumno.fecha_inicio_opt || alumno.created_at;
+      const diasDesdeEntrega = fechaInicioReal ? Math.max(0, Math.floor((new Date().getTime() - new Date(fechaInicioReal).getTime()) / (1000 * 60 * 60 * 24))) : 0;
+      let diasAtrasoCertificacion = 0;
+      let alertaCriticaCertificacion = false;
+
+      if (diasDesdeEntrega >= 56 && alumno.etapa_actual !== 'Certificado' && alumno.estatus !== 'Baja') {
+        diasAtrasoCertificacion = diasDesdeEntrega - 56;
+        alertaCriticaCertificacion = true;
+      }
+
       // Algoritmo Ponderado de Semáforo de Riesgo
       let riesgoBaja = 0;
       if (diasSinManejar > 5) riesgoBaja += 40;
       if (diasSinOPT > 4) riesgoBaja += 30;
       if (misQuejas.length > 0) riesgoBaja += 30;
+      if (alertaCriticaCertificacion) riesgoBaja += 50;
 
-      if (riesgoBaja >= 60) {
+      // Generación de Alertas
+      if (alertaCriticaCertificacion) {
+        alertasIA.unshift({
+          id: alumno.id,
+          tipo: 'certificacion',
+          texto: `🚨 URGENTE - CERTIFICACIÓN VENCIDA: ${alumno.nombre_completo} superó las 8 semanas. Tiene ${diasAtrasoCertificacion} días de atraso en su operación sin ser certificado.`
+        });
+      } else if (riesgoBaja >= 60) {
         alertasIA.push({
           id: alumno.id,
+          tipo: 'riesgo',
           texto: `⚠️ Riesgo Crítico (${riesgoBaja}%): ${alumno.nombre_completo} acumula ${diasSinManejar} días sin registros y ${diasSinOPT} días sin OPT.`
         });
       }
 
-      // Acumular datos para gráficas por Unidad de Negocio
       const unName = alumno.unidad_negocio || "No Asignada";
       if (!comparativoUN[unName]) comparativoUN[unName] = { name: unName, kmReal: 0, metaKm: 0 };
       comparativoUN[unName].kmReal += kmTotales;
-      comparativoUN[unName].metaKm += 4000; // Meta estándar global de graduación
+      comparativoUN[unName].metaKm += 4000;
 
-      // Acumular datos para gráficas por Gerente
       const gerName = alumno.gerente || "Sin Gerente";
       if (!comparativoGerentes[gerName]) comparativoGerentes[gerName] = { name: gerName, kmReal: 0, metaKm: 0 };
       comparativoGerentes[gerName].kmReal += kmTotales;
@@ -195,7 +210,6 @@ export default function AdminDashboard() {
       };
     });
 
-    // Filtrar la lista final según los selectores superiores
     const listaFiltrada = alumnosModificados.filter(a => {
       const unMatch = filtroUN === 'ALL' || a.unidad_negocio === filtroUN;
       const genMatch = filtroGeneracion === 'ALL' || a.generacion === filtroGeneracion;
@@ -217,7 +231,6 @@ export default function AdminDashboard() {
   return (
     <div style={{ padding: '25px', backgroundColor: '#f8fafc', minHeight: '100vh', fontFamily: 'system-ui, sans-serif', color: '#1e293b' }}>
       
-      {/* CONTROL DE RED SUPERIOR */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', borderBottom: '2px solid #e2e8f0', paddingBottom: '15px' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '26px', fontWeight: 900, color: '#0f172a' }}>📈 LARMEX Control Tower & Ecosistema OPT</h1>
@@ -229,7 +242,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* MENÚ DE SECCIONES (TABS DE ADMINISTRACIÓN) */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '25px' }}>
         <button onClick={() => setPestañaActiva('general')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'general' ? '#0f172a' : '#fff', color: pestañaActiva === 'general' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}><BarChart3 size={16} style={{marginRight: '5px', inlineSize: 'auto'}}/> Vista General Directiva</button>
         <button onClick={() => setPestañaActiva('metas')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'metas' ? '#0f172a' : '#fff', color: pestañaActiva === 'metas' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>🏆 Avances vs Metas</button>
@@ -238,7 +250,6 @@ export default function AdminDashboard() {
         <button onClick={() => setPestañaActiva('biblioteca')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'biblioteca' ? '#0f172a' : '#fff', color: pestañaActiva === 'biblioteca' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}><Upload size={16}/> Biblioteca PPT</button>
       </div>
 
-      {/* FILTROS GLOBALES DE SEGMENTACIÓN */}
       <div style={{ display: 'flex', gap: '15px', background: '#fff', padding: '15px', borderRadius: '12px', marginBottom: '25px', border: '1px solid #e2e8f0' }}>
         <div style={{ flex: 1 }}>
           <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}><MapPin size={12}/> Unidad de Negocio:</label>
@@ -260,23 +271,31 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ==========================================
-          PESTAÑA 1: VISTA GENERAL DIRECTIVA
-      ========================================== */}
       {pestañaActiva === 'general' && (
         <div>
-          {/* Alertas Críticas de Baja */}
           <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', padding: '20px', borderRadius: '12px', marginBottom: '25px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#e11d48', marginBottom: '15px' }}>
               <ShieldAlert size={20} />
               <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>🧠 Semáforo e Alertas de Baja por Inactividad Logística</h3>
             </div>
-            {analiticaProcesada.alertasIA.length === 0 ? <p style={{fontSize: '14px', color: '#15803d'}}>✓ Indicadores óptimos: No hay riesgos latentes detectados hoy.</p> : analiticaProcesada.alertasIA.map((al, i) => (
-              <div key={i} style={{ padding: '10px', background: '#fff', borderLeft: '4px solid #ef4444', borderRadius: '6px', marginBottom: '6px', fontSize: '13px', color: '#991b1b' }}>{al.texto}</div>
+            {analiticaProcesada.alertasIA.length === 0 ? (
+              <p style={{fontSize: '14px', color: '#15803d'}}>✓ Indicadores óptimos: No hay riesgos latentes detectados hoy.</p>
+            ) : analiticaProcesada.alertasIA.map((al, i) => (
+              <div key={i} style={{ 
+                padding: '12px', 
+                background: al.tipo === 'certificacion' ? '#7f1d1d' : '#fff', 
+                borderLeft: `4px solid ${al.tipo === 'certificacion' ? '#f87171' : '#ef4444'}`, 
+                borderRadius: '6px', 
+                marginBottom: '8px', 
+                fontSize: '13px', 
+                color: al.tipo === 'certificacion' ? '#fecaca' : '#991b1b',
+                fontWeight: al.tipo === 'certificacion' ? 'bold' : 'normal'
+              }}>
+                {al.texto}
+              </div>
             ))}
           </div>
 
-          {/* Gráficas de Comparativas por Gerente y Unidad */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
             <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
               <h4 style={{ margin: '0 0 15px 0', fontSize: '14px' }}>🏢 Desempeño Acumulado por Unidad de Negocio</h4>
@@ -315,9 +334,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* ==========================================
-          PESTAÑA 2: AVANCES VS METAS (TABLA CON TIEMPOS MUERTOS)
-      ========================================== */}
       {pestañaActiva === 'metas' && (
         <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
           <div style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', fontWeight: 'bold' }}>Estatus de las 8 Semanas de Operación en Flota</div>
@@ -340,13 +356,9 @@ export default function AdminDashboard() {
                     <td style={{ padding: '12px' }}>{alumno.unidad_negocio || "No Configurada"} <br/><span style={{ fontSize: '11px', color: '#64748b' }}>Gerente: {alumno.gerente || "N/A"}</span></td>
                     <td style={{ padding: '12px' }}><span style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', background: alumno.etapa_actual === 'OPT' ? '#dcfce7' : '#fee2e2', color: alumno.etapa_actual === 'OPT' ? '#15803d' : '#ef4444' }}>{alumno.etapa_actual}</span></td>
                     <td style={{ padding: '12px' }}><strong>{alumno.kmReal} km</strong> / {alumno.hrsReal} hrs</td>
-                    
-                    {/* Alerta de días acumulados sin asignación de OPT, impactando la métrica del Líder */}
                     <td style={{ padding: '12px', color: alumno.diasSinOPT > 4 ? '#ef4444' : '#1e293b', fontWeight: alumno.diasSinOPT > 4 ? 'bold' : 'normal' }}>
                       {alumno.diasSinOPT > 0 ? `${alumno.diasSinOPT} días perdidos` : '✓ OPT Asignado'}
                     </td>
-                    
-                    {/* Alerta de días muertos sin manejar */}
                     <td style={{ padding: '12px', color: alumno.diasSinManejar > 5 ? '#ef4444' : '#10b981', fontWeight: 'bold' }}>
                       {alumno.diasSinManejar} días inactivo
                     </td>
@@ -358,12 +370,8 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* ==========================================
-          PESTAÑA 3: MODULAR DE ALTAS (NUEVO REQUERIMIENTO)
-      ========================================== */}
       {pestañaActiva === 'altas' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px' }}>
-          {/* Selector de tipo de registro corporativo */}
           <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
             <h4 style={{ marginTop: 0, marginBottom: '15px' }}>Estructura de Ingresos</h4>
             {['Alumno', 'Lider', 'Gerente', 'Staff', 'UN'].map(tipo => (
@@ -377,7 +385,6 @@ export default function AdminDashboard() {
             ))}
           </div>
 
-          {/* Formulario Dinámico Unificado */}
           <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
             <h3>Formulario de Alta Oficial: {tipoAlta.toUpperCase()}</h3>
             <form onSubmit={ejecutarAltaCorporativa} style={{ marginTop: '20px' }}>
@@ -439,9 +446,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* ==========================================
-          PESTAÑA 4: AUDITORÍA DE LA SEMANA DE INDUCCIÓN
-      ========================================== */}
       {pestañaActiva === 'induccion' && (
         <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
           <h3>Control y Registro de Capacitación Teórica (Semana 1)</h3>
@@ -473,9 +477,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* ==========================================
-          PESTAÑA 5: BIBLIOTECA (REPOSITORIO PPT)
-      ========================================== */}
       {pestañaActiva === 'biblioteca' && (
         <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', border: '1px solid #e2e8f0', maxWidth: '600px', margin: '0 auto' }}>
           <h3 style={{marginTop: 0}}>Cargar Presentaciones Corporativas (PPT / PDF)</h3>

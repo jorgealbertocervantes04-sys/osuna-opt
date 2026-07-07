@@ -11,7 +11,7 @@ import {
 import { supabase } from "../../services/supabaseClient";
 
 // ==========================================
-// COMPONENTES DE UI (Mantenidos de tu diseño)
+// COMPONENTES DE UI
 // ==========================================
 const FilterSelect = ({ icon: Icon, label, options, value, onChange }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '150px' }}>
@@ -89,11 +89,9 @@ export default function DashboardGeneral() {
   const [dbStatus, setDbStatus] = useState('Conectando a Supabase...');
   const [dbColor, setDbColor] = useState('#f59e0b');
   
-  // Datos Reales de Base de Datos
   const [usuarios, setUsuarios] = useState([]);
   const [viajes, setViajes] = useState([]);
   
-  // Filtros
   const [filtroFecha, setFiltroFecha] = useState('Este Mes');
   const [filtroUN, setFiltroUN] = useState('ALL');
   const [filtroGeneracion, setFiltroGeneracion] = useState('ALL');
@@ -116,32 +114,36 @@ export default function DashboardGeneral() {
     cargarDatosCentrales();
   }, []);
 
-  // Procesamiento de datos reales
   const { datosFiltrados, alertasIA, dataLideres } = useMemo(() => {
     let alumnosProcesados = [];
     let alertas = [];
     
-    // 1. Filtrar solo alumnos
-    const soloAlumnos = usuarios.filter(u => u.rol === 'Alumno');
+    const soloAlumnos = usuarios.filter(u => u.rol === 'Alumno' && u.estatus !== 'Baja');
     
     soloAlumnos.forEach(a => {
       const misViajes = viajes.filter(v => v.id_alumno === a.id);
       const kmAcumulados = misViajes.reduce((sum, v) => sum + (parseFloat(v.km_recorridos) || 0), 0);
       const minsAcumulados = misViajes.reduce((sum, v) => sum + (parseFloat(v.tiempo_total_minutos) || 0), 0);
       
-      let diasSinManejar = 0;
-      if (misViajes.length > 0) {
-        const ultimoViaje = Math.max(...misViajes.map(v => new Date(v.hora_inicio).getTime()));
-        diasSinManejar = Math.max(0, Math.floor((new Date().getTime() - ultimoViaje) / (1000 * 60 * 60 * 24)));
+      let diasSinManejar = misViajes.length > 0 
+        ? Math.max(0, Math.floor((new Date().getTime() - Math.max(...misViajes.map(v => new Date(v.hora_inicio).getTime()))) / (1000 * 60 * 60 * 24)))
+        : 10;
+
+      let diasAsignacion = a.tutor ? 0 : 5;
+      
+      // MOTOR DE CERTIFICACIÓN 8 SEMANAS
+      const fechaInicioReal = a.fecha_entrega_operacion || a.fecha_inicio_opt || a.created_at;
+      const diasDesdeEntrega = fechaInicioReal ? Math.max(0, Math.floor((new Date().getTime() - new Date(fechaInicioReal).getTime()) / (1000 * 60 * 60 * 24))) : 0;
+      let diasAtraso = 0;
+
+      if (diasDesdeEntrega >= 56 && a.etapa_actual !== 'Certificado') {
+        diasAtraso = diasDesdeEntrega - 56;
+        alertas.unshift(`🚨 ALERTA DIRECTIVA - CERTIFICACIÓN VENCIDA: El operador ${a.nombre_completo} (${a.generacion || 'S/A'}) excedió las 8 semanas límite. Lleva ${diasAtraso} días extra operando sin certificación final.`);
       } else {
-        diasSinManejar = 10; // Dato simulado si no hay viajes
-      }
-
-      let diasAsignacion = a.tutor_opt ? 0 : 5; // Simulado si no hay tutor
-      let riesgoScore = (diasSinManejar > 5 ? 40 : 0) + (diasAsignacion > 3 ? 30 : 0);
-
-      if (riesgoScore >= 60) {
-        alertas.push(`🚨 Riesgo Crítico (${riesgoScore}%): El operador ${a.nombre_completo} (${a.generacion}) acumula demasiados días de inactividad.`);
+        let riesgoScore = (diasSinManejar > 5 ? 40 : 0) + (diasAsignacion > 3 ? 30 : 0);
+        if (riesgoScore >= 60) {
+          alertas.push(`⚠️ Riesgo Crítico (${riesgoScore}%): El operador ${a.nombre_completo} acumula demasiados días de inactividad.`);
+        }
       }
 
       alumnosProcesados.push({
@@ -150,16 +152,17 @@ export default function DashboardGeneral() {
         un: a.unidad_negocio || 'S/A',
         generacion: a.generacion || 'S/A',
         lider: a.lider || 'S/A',
+        etapa: a.etapa_actual,
         kmActual: kmAcumulados,
         kmMeta: 4000,
         hrsActual: parseFloat((minsAcumulados / 60).toFixed(1)),
         hrsMeta: 100,
         diasAsignacion: diasAsignacion,
-        diasSinManejo: diasSinManejar
+        diasSinManejo: diasSinManejar,
+        diasAtrasoCertificacion: diasAtraso
       });
     });
 
-    // 2. Aplicar Filtros Superiores
     const filtrados = alumnosProcesados.filter(a => {
       const matchUN = filtroUN === 'ALL' || a.un === filtroUN;
       const matchGen = filtroGeneracion === 'ALL' || a.generacion === filtroGeneracion;
@@ -167,7 +170,6 @@ export default function DashboardGeneral() {
       return matchUN && matchGen && matchLider;
     });
 
-    // 3. Agrupación para gráfica de Líderes
     const agrupadoLideres = filtrados.reduce((acc, a) => {
       if (!acc[a.lider]) acc[a.lider] = { name: a.lider, km: 0, horas: 0 };
       acc[a.lider].km += a.kmActual;
@@ -190,7 +192,6 @@ export default function DashboardGeneral() {
   return (
     <div style={{ padding: '24px 32px', backgroundColor: '#f1f5f9', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       
-      {/* HEADER & FILTROS */}
       <header style={{ marginBottom: '32px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
           <div>
@@ -211,7 +212,6 @@ export default function DashboardGeneral() {
           </div>
         </div>
 
-        {/* BARRA DE FILTROS DINÁMICOS */}
         <div style={{ display: 'flex', gap: '16px', background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', flexWrap: 'wrap' }}>
           <FilterSelect icon={Calendar} label="Rango de Fechas" value={filtroFecha} onChange={setFiltroFecha} options={['Hoy', 'Esta Semana', 'Este Mes']} />
           <FilterSelect icon={MapPin} label="Unidad de Negocio" value={filtroUN} onChange={setFiltroUN} options={['Monterrey', 'Nuevo Laredo', 'Tijuana']} />
@@ -220,7 +220,6 @@ export default function DashboardGeneral() {
         </div>
       </header>
 
-      {/* ALERTAS PREDICTIVAS DE IA */}
       <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', padding: '20px', borderRadius: '16px', marginBottom: '24px' }}>
         <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#e11d48', display: 'flex', alignItems: 'center', gap: '8px' }}><ShieldAlert size={20}/> Termómetro de Riesgo e Inactividad</h3>
         {alertasIA.length === 0 ? <p style={{color: '#10b981', margin: 0, fontWeight: 'bold'}}>✓ Flota sin riesgos inminentes detectados.</p> : alertasIA.map((alerta, idx) => (
@@ -228,7 +227,6 @@ export default function DashboardGeneral() {
         ))}
       </div>
 
-      {/* KPIS (Uso de StatCard del usuario) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '24px', marginBottom: '32px' }}>
         <StatCard title="Promedio Asignación OPT" value={`${kpis.promAsignacion} días`} subtitle="Desde inducción hasta tutor" icon={Clock} color="#8b5cf6" statusValue={kpis.promAsignacion} thresholds={{ warning: 3, critical: 6 }} inverseStatus={true} />
         <StatCard title="Tiempo Muerto Promedio" value={`${kpis.promSinManejo} días`} subtitle="Días perdidos sin manejar" icon={AlertTriangle} color="#ef4444" statusValue={kpis.promSinManejo} thresholds={{ warning: 5, critical: 10 }} inverseStatus={true} />
@@ -236,7 +234,6 @@ export default function DashboardGeneral() {
         <StatCard title="Horas de Práctica" value={`${kpis.hrsTotal.toLocaleString()} hrs`} subtitle="Acumulado global" icon={Activity} color="#10b981" />
       </div>
 
-      {/* GRÁFICA PRINCIPAL Y TABLA */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px', marginBottom: '32px' }}>
         <div style={{ background: '#ffffff', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
           <h2 style={{ fontSize: '1.125rem', color: '#0f172a', margin: '0 0 20px 0', fontWeight: 800 }}>Kilómetros y Horas Generados por Líder</h2>
@@ -301,6 +298,11 @@ export default function DashboardGeneral() {
                             <AlertTriangle size={14}/> {a.diasSinManejo}d Inact.
                           </div>
                         </div>
+                        {a.diasAtrasoCertificacion > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.875rem', color: '#ef4444', fontWeight: 900, marginTop: '5px' }}>
+                            <AlertTriangle size={14}/> +{a.diasAtrasoCertificacion}d Vencido
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))
