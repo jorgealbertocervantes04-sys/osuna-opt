@@ -21,15 +21,6 @@ export default function DashboardAlumno() {
   const [mostrarModalActualizacion, setMostrarModalActualizacion] = useState(false);
   const [formActualizacion, setFormActualizacion] = useState({ unidad_negocio: '', lider: '', gerente: '', tutor: '' });
 
-  // En tu DashboardAlumno.js
-const [misViajes, todosUsuarios, todosMateriales, catalogos] = await Promise.all([
-  dataService.obtenerViajesPorAlumno(user.id), // <--- Utiliza la nueva función y le pasas el ID
-  dataService.obtenerUsuarios(),
-  dataService.obtenerMaterialEstudio(),
-  dataService.obtenerCatalogos()
-]);
-
-setViajes(misViajes);
   // ==========================================
   // ESTADOS RUTA OPT
   // ==========================================
@@ -73,7 +64,8 @@ setViajes(misViajes);
   ];
 
   useEffect(() => {
-    const cargarTodo = async () => {
+    // Función asíncrona interna para evitar el error de Vite al compilar
+    const cargarTodo = async () => { 
       try {
         const session = localStorage.getItem('udat_app_session');
         if (!session) return navigate('/app');
@@ -82,14 +74,14 @@ setViajes(misViajes);
         setUsuarioActual(user);
         setEtapaActual(user.etapa_actual || 'Prueba Intermedia');
 
-        const [todosViajes, todosUsuarios, todosMateriales, catalogos] = await Promise.all([
-          dataService.obtenerViajes(),
+        // Optimización: Descargamos únicamente los viajes de este alumno
+        const [misViajes, todosUsuarios, todosMateriales, catalogos] = await Promise.all([
+          dataService.obtenerViajesPorAlumno(user.id),
           dataService.obtenerUsuarios(),
           dataService.obtenerMaterialEstudio(),
           dataService.obtenerCatalogos()
         ]);
 
-        const misViajes = todosViajes.filter(v => v.id_alumno === user.id);
         setViajes(misViajes);
         setListaOPTs(todosUsuarios.filter(u => u.rol === 'Tutor'));
         setMateriales(todosMateriales.filter(m => m.dirigido_a === 'Alumno' || m.dirigido_a === 'Ambos' || !m.dirigido_a));
@@ -113,7 +105,8 @@ setViajes(misViajes);
         setCargandoDatos(false);
       }
     };
-    cargarTodo();
+
+    cargarTodo(); // Llamada de ejecución segura
   }, [navigate]);
 
   useEffect(() => {
@@ -303,8 +296,9 @@ setViajes(misViajes);
         setFotoArchivoFisico(null); setFotoPrevisualizacion(null);
         setKmInicial(''); setKmFinal('');
         
-        const todos = await dataService.obtenerViajes();
-        setViajes(todos.filter(v => v.id_alumno === usuarioActual.id));
+        // Optimización: Recargamos únicamente los viajes de este alumno tras finalizar ruta
+        const nuevosViajes = await dataService.obtenerViajesPorAlumno(usuarioActual.id);
+        setViajes(nuevosViajes);
       } else {
         alert("Error al registrar en base de datos: " + dbError.message);
       }
@@ -335,7 +329,7 @@ setViajes(misViajes);
 
   let kmRestantesVisuales = kmTotales;
 
-  // LÓGICA DE VENCIMIENTO DEL ALUMNO
+  // LÓGICA DE VENCIMIENTO DEL ALUMNO (8 Semanas)
   let diasDesdeEntrega = 0;
   let diasAtrasoCertificacion = 0;
   if (usuarioActual && (usuarioActual.fecha_entrega_operacion || usuarioActual.fecha_inicio_opt)) {
