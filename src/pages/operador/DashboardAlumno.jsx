@@ -17,9 +17,9 @@ export default function DashboardAlumno() {
   const [temaInduccion, setTemaInduccion] = useState('');
   const [duracionInduccion, setDuracionInduccion] = useState('');
 
-  // Formulario Selección OPT
+  // Formulario Selección OPT (¡Corregido 'tutor_opt' a 'tutor' para que coincida con tu BD!)
   const [mostrarModalActualizacion, setMostrarModalActualizacion] = useState(false);
-  const [formActualizacion, setFormActualizacion] = useState({ unidad_negocio: '', lider: '', gerente: '', tutor_opt: '' });
+  const [formActualizacion, setFormActualizacion] = useState({ unidad_negocio: '', lider: '', gerente: '', tutor: '' });
 
   // ==========================================
   // ESTADOS RUTA OPT
@@ -85,7 +85,6 @@ export default function DashboardAlumno() {
         setListaOPTs(todosUsuarios.filter(u => u.rol === 'Tutor'));
         setMateriales(todosMateriales.filter(m => m.dirigido_a === 'Alumno' || m.dirigido_a === 'Ambos' || !m.dirigido_a));
         
-        // Uso seguro de catálogos
         setCatUnidades(catalogos?.unidades || []);
         setCatLideres(catalogos?.lideres || []);
         setCatGerentes(catalogos?.gerentes || []);
@@ -108,21 +107,14 @@ export default function DashboardAlumno() {
     cargarTodo();
   }, [navigate]);
 
-  // ==========================================
-  // PERMISOS DE NOTIFICACIÓN EN SEGUNDO PLANO
-  // ==========================================
   useEffect(() => {
     if (etapaActual === 'Induccion' && typeof window !== 'undefined' && 'Notification' in window) {
-      Notification.requestPermission()
-        .then(permission => {
-          if (permission === 'granted') console.log("Permiso de notificaciones concedido.");
-        })
-        .catch(err => console.log("Permisos bloqueados por el navegador:", err));
+      Notification.requestPermission().catch(err => console.log("Permisos bloqueados", err));
     }
   }, [etapaActual]);
 
   // ==========================================
-  // FUNCIONES DE LAS NUEVAS ETAPAS (Protegidas)
+  // FUNCIONES DE LAS NUEVAS ETAPAS 
   // ==========================================
   const registrarPruebaIntermedia = async (resultado) => {
     if (resultado === 'No' && !motivoFallo) return alert("Por favor, explica qué sucedió para que podamos ayudarte.");
@@ -141,30 +133,19 @@ export default function DashboardAlumno() {
       } else {
           alert("Error de red: " + error.message);
       }
-    } catch (err) {
-      alert("Falla de conexión: " + err.message);
-    }
+    } catch (err) { alert("Falla de conexión: " + err.message); }
   };
 
   const registrarAvanceInduccion = async () => {
     if (!temaInduccion || !duracionInduccion) return alert("Completa el tema y la duración.");
     try {
-      const payload = {
-          id_alumno: usuarioActual.id,
-          tema_visto: temaInduccion,
-          duracion_minutos: parseInt(duracionInduccion),
-          fecha_registro: new Date().toISOString()
-      };
+      const payload = { id_alumno: usuarioActual.id, tema_visto: temaInduccion, duracion_minutos: parseInt(duracionInduccion), fecha_registro: new Date().toISOString() };
       const { error } = await supabase.from('registros_induccion').insert([payload]);
       if (!error) {
-          alert("✓ Registro de inducción guardado correctamente. ¡Sigue así!");
+          alert("✓ Registro de inducción guardado correctamente.");
           setTemaInduccion(''); setDuracionInduccion('');
-      } else {
-          alert("Error al guardar: " + error.message);
-      }
-    } catch (err) {
-      alert("Error inesperado: " + err.message);
-    }
+      } else { alert("Error al guardar: " + error.message); }
+    } catch (err) { alert("Error inesperado: " + err.message); }
   };
 
   const finalizarInduccion = async () => {
@@ -172,38 +153,41 @@ export default function DashboardAlumno() {
     if (!confirmar) return;
 
     try {
-      const { error } = await supabase.from('usuarios').update({ 
-          etapa_actual: 'OPT',
-          fecha_inicio_opt: new Date().toISOString()
-      }).eq('id', usuarioActual.id);
-
+      const { error } = await supabase.from('usuarios').update({ etapa_actual: 'OPT', fecha_inicio_opt: new Date().toISOString() }).eq('id', usuarioActual.id);
       if (!error) {
           setEtapaActual('OPT');
           setMostrarModalActualizacion(true);
           localStorage.setItem('udat_app_session', JSON.stringify({...usuarioActual, etapa_actual: 'OPT'}));
       }
-    } catch(err) {
-      alert("Error al finalizar etapa: " + err.message);
-    }
+    } catch(err) { alert("Error al finalizar etapa: " + err.message); }
   };
 
+  // 🔥 AQUÍ SE SOLUCIONÓ EL ERROR id=eq.null (CONEXIÓN DIRECTA Y SEGURA) 🔥
   const guardarActualizacionPerfil = async () => {
     if (!formActualizacion.unidad_negocio || !formActualizacion.lider || !formActualizacion.gerente) {
-      return alert("Unidad, Líder y Gerente son obligatorios. (El Tutor OPT puede quedar vacío).");
+      return alert("Unidad, Líder y Gerente son obligatorios. (El Tutor puede quedar vacío).");
     }
+    if (!usuarioActual || !usuarioActual.id) {
+      return alert("Error crítico: No se detectó tu sesión. Cierra sesión y vuelve a entrar.");
+    }
+    
     try {
-      const { exito } = await dataService.actualizarPerfilAlumno(usuarioActual.id, formActualizacion);
-      if (exito) {
+      const { error } = await supabase
+        .from('usuarios')
+        .update(formActualizacion)
+        .eq('id', usuarioActual.id);
+
+      if (!error) {
         const userActualizado = { ...usuarioActual, ...formActualizacion, fecha_actualizacion_perfil: new Date().toISOString() };
         localStorage.setItem('udat_app_session', JSON.stringify(userActualizado));
         setUsuarioActual(userActualizado);
         setMostrarModalActualizacion(false);
         alert("¡Perfil actualizado con éxito! Ya puedes registrar tus viajes.");
       } else {
-        alert("Ocurrió un problema al guardar tu configuración.");
+        alert("Ocurrió un problema al guardar tu configuración: " + error.message);
       }
     } catch(err) {
-      alert("Error de conexión al guardar el perfil.");
+      alert("Error de conexión al guardar el perfil: " + err.message);
     }
   };
 
@@ -223,13 +207,16 @@ export default function DashboardAlumno() {
             actividad_sin_manejo: manejaHoy === 'NO' ? actividadSinManejo : null,
             fecha_hora: new Date().toISOString()
           };
-          await dataService.registrarAsistencia(payload);
-          setAsistenciaEnviada(true);
-          alert("✓ Asistencia validada por GPS exitosamente.");
+          // Conexión Directa
+          const { error } = await supabase.from('asistencias').insert([payload]);
+          if(!error) {
+            setAsistenciaEnviada(true);
+            alert("✓ Asistencia validada por GPS exitosamente.");
+          } else { alert("Error de base de datos: " + error.message); }
         } catch (err) { alert("Error al registrar asistencia: " + err.message); } 
         finally { setRegistrandoAsistencia(false); }
       },
-      () => { setRegistrandoAsistencia(false); alert("⛔ CANDADO: Por favor activa el GPS de tu navegador/celular para continuar."); },
+      () => { setRegistrandoAsistencia(false); alert("⛔ CANDADO: Activa el GPS de tu celular para continuar."); },
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
@@ -255,44 +242,35 @@ export default function DashboardAlumno() {
         km_iniciales: parseFloat(kmInicial), 
         hora_inicio: new Date().toISOString()
       };
-      const res = await dataService.guardarViaje(payload);
       
-      // Manejo seguro del ID del viaje retornado
-      const idViaje = res.data?.id || res.data?.[0]?.id;
-      if (res.exito && idViaje) {
-        setIdViajeActivo(idViaje); 
+      // Conexión Directa para asegurar la creación de la ruta
+      const { data, error } = await supabase.from('viajes_diarios').insert([payload]).select();
+      
+      if (!error && data && data.length > 0) {
+        setIdViajeActivo(data[0].id); 
         setEstadoViaje('progreso');
       } else {
-        alert("Ocurrió un error al abrir la bitácora.");
+        alert("Error al abrir la bitácora. Asegúrate de desactivar RLS en 'viajes_diarios': " + (error?.message || ''));
       }
-    } catch(err) {
-      alert("Error al iniciar ruta: " + err.message);
-    }
+    } catch(err) { alert("Error al iniciar ruta: " + err.message); }
   };
 
   const finalizarRuta = async () => {
     if (!kmFinal || !fotoArchivoFisico || !evalTrato || !evalInstruccion) {
       return alert("⚠️ CANDADO: Foto del odómetro y evaluación de la ruta son obligatorios.");
     }
-    
     try {
-      // 1. UPLOAD DE IMAGEN AL STORAGE DE SUPABASE (CON SALVAVIDAS DE EXTENSIÓN)
       let urlFotoPublica = '';
       const tieneExtension = fotoArchivoFisico.name.includes('.');
       const fileExt = tieneExtension ? fotoArchivoFisico.name.split('.').pop() : 'jpg';
       const fileName = `${usuarioActual.id}-${Date.now()}.${fileExt}`;
       
-      const { error: uploadError } = await supabase.storage
-          .from('evidencias')
-          .upload(`odometros/${fileName}`, fotoArchivoFisico);
-          
+      const { error: uploadError } = await supabase.storage.from('evidencias').upload(`odometros/${fileName}`, fotoArchivoFisico);
       if (uploadError) return alert("Error al subir la imagen a la nube corporativa: " + uploadError.message);
       
-      // Obtener URL de forma segura para cualquier versión de Supabase
       const publicUrlResponse = supabase.storage.from('evidencias').getPublicUrl(`odometros/${fileName}`);
       urlFotoPublica = publicUrlResponse.data?.publicUrl || publicUrlResponse.publicURL || '';
 
-      // 2. CÁLCULO SEGURO DE KMS Y TIEMPOS
       const viajeOriginal = viajes.find(v => v.id === idViajeActivo);
       const baseKm = viajeOriginal ? parseFloat(viajeOriginal.km_iniciales) : parseFloat(kmInicial);
       const kmRecorridos = parseFloat(kmFinal) - baseKm;
@@ -301,7 +279,6 @@ export default function DashboardAlumno() {
       const horaInicio = viajeOriginal ? new Date(viajeOriginal.hora_inicio).getTime() : new Date().getTime();
       const mins = Math.floor((new Date().getTime() - horaInicio) / 60000);
 
-      // 3. GUARDAR EL REGISTRO CON LA URL LIMPIA
       const payload = {
         hora_fin: new Date().toISOString(),
         km_finales: parseFloat(kmFinal),
@@ -313,25 +290,20 @@ export default function DashboardAlumno() {
         foto_odometro_url: urlFotoPublica
       };
 
-      const res = await dataService.guardarViaje(payload, idViajeActivo);
-      if (res.exito) {
+      // Conexión Directa para cerrar el viaje
+      const { error: dbError } = await supabase.from('viajes_diarios').update(payload).eq('id', idViajeActivo);
+      if (!dbError) {
         alert(`✓ ¡Reporte Enviado!\nRecorriste: ${kmRecorridos} KM.\nTu imagen se guardó en el Storage.`);
-        setEstadoViaje('reposo'); 
-        setIdViajeActivo(null); 
-        setFotoArchivoFisico(null); 
-        setFotoPrevisualizacion(null);
-        setKmInicial('');
-        setKmFinal('');
+        setEstadoViaje('reposo'); setIdViajeActivo(null); 
+        setFotoArchivoFisico(null); setFotoPrevisualizacion(null);
+        setKmInicial(''); setKmFinal('');
         
-        // Recargamos los viajes
         const todos = await dataService.obtenerViajes();
         setViajes(todos.filter(v => v.id_alumno === usuarioActual.id));
       } else {
-        alert("Error al registrar en base de datos.");
+        alert("Error al registrar en base de datos: " + dbError.message);
       }
-    } catch(err) {
-      alert("Error crítico al procesar el cierre de ruta: " + err.message);
-    }
+    } catch(err) { alert("Error crítico al procesar el cierre de ruta: " + err.message); }
   };
 
   const enviarEncuesta = async () => {
@@ -343,27 +315,20 @@ export default function DashboardAlumno() {
         calificacion_general: parseInt(encuestaEstrellas), comentarios: encuestaComentarios,
         fecha_creacion: new Date().toISOString()
       };
-      const res = await dataService.guardarEncuesta(payload);
-      if (res.exito) {
+      // Conexión Directa
+      const { error } = await supabase.from('encuestas').insert([payload]);
+      if (!error) {
         alert("✓ Tu reporte 360 fue enviado de manera anónima a corporativo.");
         setEncuestaTipo(''); setEncuestaNombre(''); setEncuestaEstrellas(''); setEncuestaComentarios('');
-      } else {
-        alert("Hubo un error al enviar el reporte.");
-      }
-    } catch(err) {
-      alert("Error de conexión: " + err.message);
-    }
+      } else { alert("Hubo un error al enviar el reporte: " + error.message); }
+    } catch(err) { alert("Error de conexión: " + err.message); }
   };
 
-  // ==========================================
-  // CÁLCULOS GLOBALES (Mejorados)
-  // ==========================================
   const kmTotales = viajes.reduce((acc, v) => acc + (parseFloat(v.km_recorridos) || 0), 0);
   const xpInfo = kmTotales >= 4000 ? { nivel: 'Experto', progreso: 100 } : kmTotales >= 1500 ? { nivel: 'Intermedio', progreso: ((kmTotales - 1500) / 2500) * 100 } : { nivel: 'Novato', progreso: (kmTotales / 1500) * 100 };
 
   if (cargandoDatos) return <div style={{color: '#fff', textAlign: 'center', padding: '50px'}}>Sincronizando Sistema...</div>;
 
-  // Lógica segura para repartir los kilómetros en las 8 semanas visualmente
   let kmRestantesVisuales = kmTotales;
 
   return (
@@ -451,13 +416,13 @@ export default function DashboardAlumno() {
                             <option value="">-- Selecciona Líder Operativo --</option>
                             {catLideres.map((l, i) => <option key={`lid-${i}`} value={l.nombre}>{l.nombre}</option>)}
                         </select>
-                        <select value={formActualizacion.tutor_opt} onChange={(e) => setFormActualizacion({...formActualizacion, tutor_opt: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '25px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }}>
+                        <select value={formActualizacion.tutor} onChange={(e) => setFormActualizacion({...formActualizacion, tutor: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '25px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }}>
                             <option value="">-- Selecciona Tutor OPT (Opcional) --</option>
-                            {listaOPTs.map((t) => <option key={t.id} value={t.id}>{t.nombre_completo}</option>)}
+                            {listaOPTs.map((t) => <option key={t.id} value={t.nombre_completo}>{t.nombre_completo}</option>)}
                         </select>
 
                         <button onClick={guardarActualizacionPerfil} style={{ width: '100%', padding: '14px', background: '#0284c7', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Guardar e Iniciar Operación</button>
-                        <p style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', marginTop: '15px' }}>Nota: Si dejas el Tutor OPT vacío, tu líder será notificado del retraso en tu asignación.</p>
+                        <p style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', marginTop: '15px' }}>Nota: Si dejas el Tutor vacío, tu líder será notificado.</p>
                     </div>
                 </div>
             )}
@@ -537,12 +502,11 @@ export default function DashboardAlumno() {
                 </div>
             )}
 
-            {/* TAB 8 SEMANAS (Lógica de reparto visual corregida) */}
+            {/* TAB 8 SEMANAS */}
             {activeTab === 'avance' && (
               <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', animation: 'fadeIn 0.3s' }}>
                 <h3 style={{ marginTop: 0, borderBottom: '1px solid #334155', paddingBottom: '10px' }}>Avance Escalonado de Metas</h3>
                 {metasUDAT.map((m, idx) => {
-                  // Lógica matemática para repartir los kilómetros totales del alumno a lo largo de las semanas
                   const kmEstaSemana = Math.min(kmRestantesVisuales, m.km);
                   kmRestantesVisuales = Math.max(0, kmRestantesVisuales - kmEstaSemana);
                   const pct = Math.min((kmEstaSemana / m.km) * 100, 100);
