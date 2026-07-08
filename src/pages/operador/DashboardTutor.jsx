@@ -40,16 +40,15 @@ export default function DashboardTutor() {
       setUsuarioActual(user);
 
       try {
-        const [todosUsuarios, todosMateriales, todosViajes, catalogos] = await Promise.all([
+        // OPTIMIZACIÓN ANTI-TIMEOUT: Eliminamos la carga masiva de todos los viajes aquí
+        const [todosUsuarios, todosMateriales, catalogos] = await Promise.all([
           dataService.obtenerUsuarios(),
           dataService.obtenerMaterialEstudio(),
-          dataService.obtenerViajes(),
           dataService.obtenerCatalogos()
         ]);
         
         setAlumnos(todosUsuarios.filter(u => u.rol === 'Alumno' && u.estatus !== 'Baja'));
         setMaterialesTutor(todosMateriales.filter(m => m.dirigido_a === 'Tutor' || m.dirigido_a === 'Ambos'));
-        setViajes(todosViajes);
         
         setCatUnidades(catalogos?.unidades || []);
         setCatLideres(catalogos?.lideres || []);
@@ -78,6 +77,23 @@ export default function DashboardTutor() {
       if (draftRubrica) setRubrica(draftRubrica);
     }
   }, [navigate]);
+
+  // EFECTO OPTIMIZADO: Carga reactiva de viajes por alumno seleccionado para prevenir fugas y sobrecargas
+  useEffect(() => {
+    const cargarViajesAlumno = async () => {
+      if (!alumnoSeleccionado) {
+        setViajes([]);
+        return;
+      }
+      try {
+        const viajesData = await dataService.obtenerViajesPorAlumno(alumnoSeleccionado);
+        setViajes(viajesData);
+      } catch (err) {
+        console.error("Error al obtener viajes específicos del alumno:", err);
+      }
+    };
+    cargarViajesAlumno();
+  }, [alumnoSeleccionado]);
 
   // Motor Activo de Autoguardado Local
   useEffect(() => {
@@ -133,13 +149,11 @@ export default function DashboardTutor() {
   let estadisticasAlumno = null;
 
   if (infoAlumnoActivo) {
-    const viajesAlumno = viajes.filter(v => v.id_alumno === alumnoSeleccionado);
-    const kmTotales = viajesAlumno.reduce((sum, v) => sum + (parseFloat(v.km_recorridos) || 0), 0);
+    const kmTotales = viajes.reduce((sum, v) => sum + (parseFloat(v.km_recorridos) || 0), 0);
     
-    // Cálculo exacto de días transcurridos sin registros prácticos de conducción
     let diasSinConducir = 0;
-    if (viajesAlumno.length > 0) {
-      const fechas = viajesAlumno.map(v => new Date(v.hora_inicio || Date.now()).getTime());
+    if (viajes.length > 0) {
+      const fechas = viajes.map(v => new Date(v.hora_inicio || Date.now()).getTime());
       const ultimoViaje = Math.max(...fechas);
       diasSinConducir = Math.max(0, Math.floor((new Date().getTime() - ultimoViaje) / (1000 * 60 * 60 * 24)));
     } else if (infoAlumnoActivo.fecha_inicio_opt) {
@@ -156,7 +170,8 @@ export default function DashboardTutor() {
 
   const enviarEvaluacionTutor = async () => {
     if (!alumnoSeleccionado) return alert("Paso 1: Selecciona un operador en práctica.");
-    if (notes.trim().length < 15) return alert("Paso 3: Justificación técnica obligatoria (Mínimo 15 caracteres).");
+    // CORRECCIÓN: Se reemplaza 'notes' inexistente por el estado real 'notas'
+    if (notas.trim().length < 15) return alert("Paso 3: Justificación técnica obligatoria (Mínimo 15 caracteres).");
     if (respondidas < 9) return alert("⚠️ CANDADO ACTIVO: Debes calificar los 9 puntos de la rúbrica corporativa.");
 
     setEnviando(true);
@@ -192,7 +207,7 @@ export default function DashboardTutor() {
                     <option value="">-- Selecciona Unidad de Negocio --</option>
                     {catUnidades.map((u, i) => <option key={i} value={u.nombre}>{u.nombre}</option>)}
                 </select>
-                <select value={formActualizacion.gerente} onChange={(e) => setFormActualizacion({...formActualizacion, gerente: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '15px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155', outline: 'none' }}>
+                <select value={formActualizacion.getente} onChange={(e) => setFormActualizacion({...formActualizacion, gerente: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '15px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155', outline: 'none' }}>
                     <option value="">-- Selecciona Gerente --</option>
                     {catGerentes.map((g, i) => <option key={i} value={g.nombre}>{g.nombre}</option>)}
                 </select>
@@ -217,7 +232,7 @@ export default function DashboardTutor() {
 
       {/* BIBLIOTECA MULTIMEDIA (PPT/PDF) */}
       <div style={{ background: '#1e293b', padding: '15px', borderRadius: '12px', marginBottom: '22px', border: '1px solid #a855f7', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-        <h3 style={{ marginTop: 0, fontSize: '15px', color: '#a855f7' }}>📚 biblioteca Técnica de Instructores</h3>
+        <h3 style={{ marginTop: 0, fontSize: '15px', color: '#a855f7' }}>📚 Biblioteca Técnica de Instructores</h3>
         {materialesTutor.length === 0 ? <p style={{ fontSize: '12px', color: '#94a3b8' }}>No hay manuales específicos para tutores disponibles hoy.</p> : materialesTutor.map(m => (
           <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', background: '#0f172a', padding: '10px', borderRadius: '6px', marginBottom: '5px', border: '1px solid #334155', alignItems: 'center' }}>
             <span style={{ fontSize: '13px' }}>{m.titulo}</span>
@@ -238,7 +253,7 @@ export default function DashboardTutor() {
           {alumnos.map(a => <option key={a.id} value={a.id}>{a.nombre_completo} ({a.generacion})</option>)}
         </select>
 
-        {/* EXPEDIENTE EN VIVO DEL ALUMNO (KM, EXÁMENES, ASISTENCIAS) */}
+        {/* EXPEDIENTE EN VIVO DEL ALUMNO */}
         {estadisticasAlumno && (
           <div style={{ background: '#0f172a', border: '1px solid #475569', padding: '15px', borderRadius: '8px', animation: 'fadeIn 0.3s' }}>
             <h4 style={{ margin: '0 0 12px 0', color: '#f8fafc', borderBottom: '1px solid #334155', paddingBottom: '5px', fontSize: '14px' }}>📋 Rendimiento Académico y Asistencias: {infoAlumnoActivo.nombre_completo}</h4>
@@ -272,7 +287,7 @@ export default function DashboardTutor() {
         </div>
       </div>
 
-      {/* RÚBRICA DE EVALUACIÓN COMPLETA SIN CORTES */}
+      {/* RÚBRICA DE EVALUACIÓN COMPLETA */}
       <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid #334155' }}>
         <h3 style={{ color: '#38bdf8', fontSize: '16px', borderBottom: '1px solid #334155', paddingBottom: '10px', marginTop: 0 }}>2. Rúbrica de Criterios Prácticos en Flota</h3>
         
