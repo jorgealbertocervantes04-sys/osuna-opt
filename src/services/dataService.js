@@ -184,5 +184,18 @@ export const dataService = {
       console.error("Error en obtenerMaterialEstudio:", error.message);
       return []; 
     }
+  },
+  // ==========================================
+  // 8. OBTENER EVALUACIONES (Faltaba en la actualización)
+  // ==========================================
+  async obtenerEvaluaciones() {
+    try {
+      const { data, error } = await supabase.from('encuestas').select('*');
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error obteniendo evaluaciones:", error.message);
+      return [];
+    }
   }
 };

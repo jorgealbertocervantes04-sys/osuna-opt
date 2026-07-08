@@ -41,7 +41,7 @@ export default function AdminDashboard() {
     try {
       const [resU, resV, resC, resI] = await Promise.all([
         supabase.from('usuarios').select('id, rol, nombre_completo, numero_empleado, unidad_negocio, gerente, lider, tutor_opt, etapa_actual, estatus, generacion, created_at, fecha_entrega_operacion, fecha_inicio_opt'),
-        supabase.from('viajes_diarios').select('id_alumno, km_recorridos, tiempo_total_minutos, hora_inicio, fecha_hora'),
+       supabase.from('viajes_diarios').select('id_alumno, km_recorridos, tiempo_total_minutos, hora_inicio'),
         supabase.from('encuestas').select('id_alumno, calificacion_general'),
         supabase.from('registros_induccion').select('*')
       ]);
