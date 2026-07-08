@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { supabase } from "../../services/supabaseClient";
+import { dataService } from '../../services/dataService';
 
 export default function Reportes() {
   const { filtrosGlobales } = useOutletContext();

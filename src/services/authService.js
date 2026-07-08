@@ -111,5 +111,17 @@ export const authService = {
       console.error("Error en activarCuenta:", error.message);
       return { exito: false, mensaje: "No se pudo registrar la información." };
     }
+  },// ==========================================
+  // 8. OBTENER EVALUACIONES (Faltaba en la actualización)
+  // ==========================================
+  async obtenerEvaluaciones() {
+    try {
+      const { data, error } = await supabase.from('encuestas').select('*');
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error obteniendo evaluaciones:", error.message);
+      return [];
+    }
   }
 };

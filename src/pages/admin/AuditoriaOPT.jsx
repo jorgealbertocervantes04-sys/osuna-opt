@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from "../../services/supabaseClient";
+import { dataService } from '../../services/dataService';
 
 export default function AuditoriaOPT() {
   const [tutores, setTutores] = useState([]);
