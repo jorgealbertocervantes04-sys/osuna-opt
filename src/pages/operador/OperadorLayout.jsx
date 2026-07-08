@@ -1,28 +1,31 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 
 export default function OperadorLayout() {
   // --- ESTADOS ---
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [modalSoporteAbierto, setModalSoporteAbierto] = useState(false);
-  
-  // Nuevo Estado: Para alertas/toasts internos del sistema sin bloquear la pantalla
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
 
-  // --- DETECTOR DE CONEXIÓN A INTERNET (Tiempo Real) ---
+  // --- DETECTOR DE CONEXIÓN A INTERNET (Tiempo Real con Limpieza de Temporizadores) ---
   useEffect(() => {
+    let timerNotificacion; // Guarda la referencia del temporizador para evitar fugas de memoria
+
     const handleOffline = () => setIsOffline(true);
+    
     const handleOnline = () => {
       setIsOffline(false);
       
-      // Upgrade: En lugar de un alert() nativo invasivo, usamos un Toast personalizado
       setNotificacion({
         visible: true,
         mensaje: "📡 Internet recuperado. Sincronizando viajes..."
       });
 
-      // Auto ocultar la notificación tras 4 segundos
-      setTimeout(() => {
+      // Si existía un temporizador previo activo, lo cancelamos antes de crear uno nuevo
+      if (timerNotificacion) clearTimeout(timerNotificacion);
+
+      // Auto ocultar la notificación tras 4 segundos de forma segura
+      timerNotificacion = setTimeout(() => {
         setNotificacion({ visible: false, mensaje: '' });
       }, 4000);
     };
@@ -33,6 +36,8 @@ export default function OperadorLayout() {
     return () => {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
+      // Limpieza estricta al desmontar el componente para eliminar procesos remanentes
+      if (timerNotificacion) clearTimeout(timerNotificacion);
     };
   }, []);
 
@@ -58,7 +63,6 @@ export default function OperadorLayout() {
     window.open(`https://wa.me/${telefono}?text=${mensaje}`, '_blank');
   };
 
-  // Nueva Función: Llamada directa por línea telefónica regular
   const realizarLlamada = (telefono) => {
     window.open(`tel:${telefono}`, '_self');
   };
@@ -120,7 +124,7 @@ export default function OperadorLayout() {
       {/* Modal Emergente de Contacto Rápido */}
       {modalSoporteAbierto && (
         <div 
-          onClick={() => setModalSoporteAbierto(false)} // Cierre al hacer clic en el fondo oscuro
+          onClick={() => setModalSoporteAbierto(false)} 
           style={{
             position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
             backgroundColor: 'rgba(0, 0, 0, 0.8)', display: 'flex', justifyContent: 'center',
@@ -129,7 +133,7 @@ export default function OperadorLayout() {
           }}
         >
           <div 
-            onClick={(e) => e.stopPropagation()} // Evita que el clic dentro del modal lo cierre
+            onClick={(e) => e.stopPropagation()} 
             style={{
               background: 'var(--card-bg)', color: 'var(--text-light)',
               padding: '30px', borderRadius: '16px', border: '1px solid var(--border-color)',
@@ -161,7 +165,7 @@ export default function OperadorLayout() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '25px' }}>
               
               {/* Tarjeta Jorge Osuna */}
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', justifyContent: 'between' }}>
+              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
                   <span style={{ display: 'inline-block', fontSize: '11px', background: 'rgba(54, 162, 235, 0.15)', color: '#36a2eb', padding: '4px 10px', borderRadius: '20px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '10px' }}>
                     Experiencia y soporte OPT
@@ -187,7 +191,7 @@ export default function OperadorLayout() {
               </div>
 
               {/* Tarjeta Raymundo Martínez */}
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', justifyContent: 'between' }}>
+              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
                   <span style={{ display: 'inline-block', fontSize: '11px', background: 'rgba(155, 89, 182, 0.15)', color: '#9b59b6', padding: '4px 10px', borderRadius: '20px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '10px' }}>
                     Seguimiento OPT
@@ -228,7 +232,7 @@ export default function OperadorLayout() {
         </div>
       )}
 
-      {/* Renderiza las pantallas hijas (Login, Dashboard, etc.) */}
+      {/* Renderiza las pantallas hijas */}
       <Outlet />
     </>
   );

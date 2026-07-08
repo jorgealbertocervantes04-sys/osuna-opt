@@ -101,8 +101,9 @@ export default function DashboardGeneral() {
     const cargarDatosCentrales = async () => {
       try {
         const [resU, resV] = await Promise.all([
-          supabase.from('usuarios').select('*'),
-          supabase.from('viajes_diarios').select('*')
+          // OPTIMIZADO: Consulta ligera para evitar Timeout (Error 500)
+          supabase.from('usuarios').select('id, rol, nombre_completo, unidad_negocio, generacion, lider, etapa_actual, estatus, tutor_opt, created_at, fecha_entrega_operacion, fecha_inicio_opt'),
+          supabase.from('viajes_diarios').select('id_alumno, km_recorridos, tiempo_total_minutos, hora_inicio')
         ]);
         if (!resU.error) setUsuarios(resU.data || []);
         if (!resV.error) setViajes(resV.data || []);

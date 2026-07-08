@@ -35,14 +35,14 @@ export default function AdminDashboard() {
   const [urlMaterial, setUrlMaterial] = useState('');
   const [dirigidoA, setDirigidoA] = useState('Alumno');
 
-  // Carga de datos de infraestructura LARMEX
+  // Carga de datos de infraestructura LARMEX (OPTIMIZADA ANTI-TIMEOUT)
   const extraerInformacionSupabase = async () => {
     setCargando(true);
     try {
       const [resU, resV, resC, resI] = await Promise.all([
-        supabase.from('usuarios').select('*'),
-        supabase.from('viajes_diarios').select('*'),
-        supabase.from('encuestas').select('*'),
+        supabase.from('usuarios').select('id, rol, nombre_completo, numero_empleado, unidad_negocio, gerente, lider, tutor_opt, etapa_actual, estatus, generacion, created_at, fecha_entrega_operacion, fecha_inicio_opt'),
+        supabase.from('viajes_diarios').select('id_alumno, km_recorridos, tiempo_total_minutos, hora_inicio, fecha_hora'),
+        supabase.from('encuestas').select('id_alumno, calificacion_general'),
         supabase.from('registros_induccion').select('*')
       ]);
 
@@ -54,6 +54,7 @@ export default function AdminDashboard() {
       setDbStatus('Online - Servidores Sincronizados');
       setDbColor('#10b981');
     } catch (err) {
+      console.error(err);
       setDbStatus('Error en Infraestructura LARMEX');
       setDbColor('#ef4444');
     } finally {
@@ -83,7 +84,7 @@ export default function AdminDashboard() {
           nombre_completo: formAlumno.nombre_completo,
           telefono: formAlumno.celular,
           generacion: formAlumno.generacion,
-          fecha_entrega_operacion: new Date(formAlumno.fecha_entrega_empresa).toISOString(), // Nuevo campo oficial
+          fecha_entrega_operacion: new Date(formAlumno.fecha_entrega_empresa).toISOString(),
           rol: 'Alumno',
           etapa_actual: 'Prueba Intermedia',
           estatus: 'En proceso'
@@ -146,7 +147,6 @@ export default function AdminDashboard() {
         diasSinOPT = Math.max(0, Math.floor((new Date().getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
       }
 
-      // Cálculo de Tiempos Muertos
       let diasSinManejar = 0;
       if (misViajes.length > 0) {
         const fechas = misViajes.map(v => new Date(v.hora_inicio || v.fecha_hora || Date.now()).getTime());
@@ -168,14 +168,12 @@ export default function AdminDashboard() {
         alertaCriticaCertificacion = true;
       }
 
-      // Algoritmo Ponderado de Semáforo de Riesgo
       let riesgoBaja = 0;
       if (diasSinManejar > 5) riesgoBaja += 40;
       if (diasSinOPT > 4) riesgoBaja += 30;
       if (misQuejas.length > 0) riesgoBaja += 30;
       if (alertaCriticaCertificacion) riesgoBaja += 50;
 
-      // Generación de Alertas
       if (alertaCriticaCertificacion) {
         alertasIA.unshift({
           id: alumno.id,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 
 // IMPORTANTE: Ruta corregida con pasos hacia atrás (../../)
@@ -32,8 +32,8 @@ export default function AdminLayout() {
   // 3. EFECTO: VALIDAR SESIÓN Y CARGAR FILTROS DESDE SUPABASE
   useEffect(() => {
     const inicializarPanel = async () => {
-      // Mejora de Seguridad: Validar sesión activa en la entrada de administración
-      const session = localStorage.getItem('udat_admin_session');
+      // CORRECCIÓN: Validar sesión usando la llave global unificada del ecosistema
+      const session = localStorage.getItem('udat_app_session');
       if (!session) {
         navigate('/');
         return;
@@ -48,7 +48,7 @@ export default function AdminLayout() {
         if (error) throw error;
 
         if (data) {
-          // Función mágica para extraer valores únicos y quitar vacíos
+          // Función para extraer valores únicos y quitar vacíos
           const extraerUnicos = (campo) => [...new Set(data.map(u => u[campo]).filter(Boolean))].sort();
           
           setOpcionesGen(extraerUnicos('generacion'));
@@ -71,14 +71,14 @@ export default function AdminLayout() {
     setFiltrosGlobales({ ...filtrosGlobales, [e.target.name]: e.target.value });
   };
 
-  // Nueva Función: Restablecer todos los filtros al estado original al instante
+  // Restablecer todos los filtros al estado original al instante
   const limpiarFiltros = () => {
     setFiltrosGlobales(estadoInicialFiltros);
   };
 
-  // Función de cierre de sesión seguro
+  // CORRECCIÓN: Función de cierre de sesión seguro limpiando la llave unificada
   const cerrarSesion = () => {
-    localStorage.removeItem('udat_admin_session');
+    localStorage.removeItem('udat_app_session');
     navigate('/');
   };
 
@@ -213,7 +213,7 @@ export default function AdminLayout() {
       {/* CONTENIDO PRINCIPAL (El Centro de la Pantalla) */}
       <div style={{ flexGrow: 1, padding: '35px', overflowY: 'auto', backgroundImage: 'radial-gradient(circle at top right, rgba(217,119,6,0.04), transparent 45%)' }}>
         
-        {/* MAGIA DE REACT: Le pasamos los filtros a TODAS las pantallas de adentro */}
+        {/* Le pasamos los filtros a TODAS las pantallas de adentro */}
         <Outlet context={{ filtrosGlobales, limpiarFiltros }} />
         
       </div>
