@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 
-// IMPORTANTE: Asegúrate de importar tu logo si lo usas en este archivo
 import logotrayecto from "../assets/logo-trayecto.png";
 
 // --- IMPORTACIONES DE LA APP MÓVIL ---
@@ -92,7 +91,7 @@ const RutaProtegida = ({ children, rolPermitido }) => {
   
   const usuario = JSON.parse(session);
 
-  if (rolPermitido && usuario.rol !== rolPermitido) {
+  if (rolPermitido && usuario.role !== rolPermitido && usuario.rol !== rolPermitido) {
     if (usuario.rol === 'Alumno') return <Navigate to="/app/alumno" replace />;
     if (usuario.rol === 'Tutor') return <Navigate to="/app/tutor" replace />;
     if (usuario.rol === 'Admin') return <Navigate to="/admin" replace />;

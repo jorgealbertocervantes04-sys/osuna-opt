@@ -27,7 +27,8 @@ export const authService = {
         throw new Error('No tienes permisos de administrador.');
       }
 
-      localStorage.setItem('udat_admin_session', JSON.stringify(perfil));
+      // CORRECCIÓN: Se unifica la llave de sesión con el resto del sistema
+      localStorage.setItem('udat_app_session', JSON.stringify(perfil));
       return { exito: true, datos: perfil };
 
     } catch (error) {
@@ -38,31 +39,26 @@ export const authService = {
 
   async logout() {
     await supabase.auth.signOut();
-    localStorage.removeItem('udat_admin_session');
+    // CORRECCIÓN: Limpieza de la llave unificada
+    localStorage.removeItem('udat_app_session');
   },
 
   // ==========================================
-  // 2. APP MÓVIL: VERIFICAR CELULAR OPERADOR
-  // ==========================================
- // ==========================================
   // 2. APP MÓVIL: VERIFICAR CELULAR OPERADOR (Mejorado)
   // ==========================================
   async verificarCelular(numeroCelular) {
     try {
-      // Limpiamos espacios en blanco que el usuario pueda escribir por error
       const celularLimpio = String(numeroCelular).trim();
 
-      // Buscamos coincidencia exacta
       let { data, error } = await supabase
         .from('usuarios')
         .select('*')
+        .eq('celular', celularLinter)
         .eq('celular', celularLimpio)
         .maybeSingle(); 
 
       if (error) throw error;
 
-      // SI NO LO ENCUENTRA CON 10 DÍGITOS:
-      // Hacemos un segundo intento buscando si en Supabase incluye el código de país (52)
       if (!data) {
         const intentoConPrefijo = `52${celularLimpio}`;
         const { data: dataPrefijo, error: errorPrefijo } = await supabase
@@ -72,7 +68,7 @@ export const authService = {
           .maybeSingle();
           
         if (errorPrefijo) throw errorPrefijo;
-        data = dataPrefijo; // Si lo encuentra con 52, usamos ese usuario
+        data = dataPrefijo; 
       }
 
       if (data) {
@@ -85,6 +81,7 @@ export const authService = {
       return { exito: false, mensaje: "Error de conexión con la base de datos." };
     }
   },
+
   // ==========================================
   // 3. APP MÓVIL: ACTIVAR CUENTA (REGISTRO)
   // ==========================================
