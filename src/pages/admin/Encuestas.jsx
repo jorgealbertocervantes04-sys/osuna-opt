@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { dataService } from '../../services/dataService';
 import { supabase } from "../../services/supabaseClient";
+
+
 export default function Encuestas() {
   const [encuestas, setEncuestas] = useState([]);
   const [cargando, setCargando] = useState(true);

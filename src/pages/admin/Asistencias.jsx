@@ -3,7 +3,7 @@ import { supabase } from "../../services/supabaseClient";
 import { dataService } from '../../services/dataService';
 
 // --- FUNCIONES PRESTABLECIDAS DE CONTROL DE FECHAS ---
-const getMonday = (d) => {
+function getMonday(d) {
   const date = new Date(d);
   const day = date.getDay();
   // Ajuste para que el lunes sea el primer día (si es domingo, retrocede 6 días)
@@ -11,7 +11,7 @@ const getMonday = (d) => {
   const monday = new Date(date.setDate(diff));
   monday.setHours(0, 0, 0, 0);
   return monday;
-};
+}
 
 const formatDateKey = (date) => date.toISOString().split('T')[0];
 

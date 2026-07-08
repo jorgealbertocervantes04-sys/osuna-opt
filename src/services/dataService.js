@@ -1,7 +1,6 @@
 import { supabase } from './supabaseClient';
 
 export const dataService = {
-  
   // ==========================================
   // 1. OBTENER USUARIOS POR ROL
   // ==========================================
@@ -80,9 +79,9 @@ export const dataService = {
       if (filtros.hasta) query = query.lte('hora_inicio', filtros.hasta);
       if (filtros.id_operador) query = query.eq('id_operador', filtros.id_operador);
 
-      // Paginación de seguridad para evitar Error 500 o Timeouts en cargas masivas
+      // Paginación de seguridad para evitar Error 500
       if (!filtros.desde && !filtros.hasta && !filtros.sinLimite) {
-        query = query.range(0, 49); // Trae los 50 registros más recientes
+        query = query.range(0, 49); 
       }
 
       const { data, error } = await query.order('hora_inicio', { ascending: false });
@@ -95,7 +94,7 @@ export const dataService = {
   },
 
   // ==========================================
-  // 4.1. OBTENER VIAJES ESPECÍFICOS POR ALUMNO (Anti-Timeout)
+  // 4.1. OBTENER VIAJES ESPECÍFICOS POR ALUMNO
   // ==========================================
   async obtenerViajesPorAlumno(id_alumno) {
     try {
@@ -177,7 +176,6 @@ export const dataService = {
       const { data, error } = await supabase
         .from('material_estudio')
         .select('*');
-        
       if (error) throw error;
       return data || [];
     } catch (error) {
@@ -185,17 +183,55 @@ export const dataService = {
       return []; 
     }
   },
+
   // ==========================================
-  // 8. OBTENER EVALUACIONES (Faltaba en la actualización)
+  // 8. OBTENER ASISTENCIAS
+  // ==========================================
+  async obtenerAsistencias() {
+    try {
+      const { data, error } = await supabase
+        .from('asistencias')
+        .select('*')
+        .order('fecha_hora', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error obteniendo asistencias:", error.message);
+      return [];
+    }
+  },
+
+  // ==========================================
+  // 9. OBTENER ENCUESTAS 
+  // ==========================================
+  async obtenerEncuestas() {
+    try {
+      const { data, error } = await supabase
+        .from('encuestas')
+        .select('*');
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error obteniendo encuestas:", error.message);
+      return [];
+    }
+  },
+
+  // ==========================================
+  // 10. OBTENER EVALUACIONES (Arreglo del error 404)
   // ==========================================
   async obtenerEvaluaciones() {
     try {
-      const { data, error } = await supabase.from('encuestas').select('*');
+      // 🔥 Leemos de "encuestas" en lugar de "evaluaciones" para evitar el 404
+      const { data, error } = await supabase
+        .from('encuestas')
+        .select('*');
       if (error) throw error;
       return data || [];
     } catch (error) {
       console.error("Error obteniendo evaluaciones:", error.message);
-      return [];
+      return []; // 🔥 Evita que la pantalla crashee con "e.filter is not a function"
     }
   }
 };
