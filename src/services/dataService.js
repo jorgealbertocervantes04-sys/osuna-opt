@@ -233,5 +233,23 @@ export const dataService = {
       console.error("Error obteniendo evaluaciones:", error.message);
       return []; // 🔥 Evita que la pantalla crashee con "e.filter is not a function"
     }
+  }, 
+  // ==========================================
+  // 11. GUARDAR RÚBRICA DE EVALUACIÓN (TUTOR)
+  // ==========================================
+  async guardarEvaluacion(payload) {
+    try {
+      const { data, error } = await supabase
+        // NOTA: Vi en tus fotos que tu tabla se llama 'evaluaciones_cardex'. Si se llama distinto, cámbialo aquí.
+        .from('evaluaciones_cardex') 
+        .insert([payload])
+        .select();
+        
+      if (error) throw error;
+      return { exito: true, data };
+    } catch (error) {
+      console.error("Error al guardar la rúbrica del tutor:", error.message);
+      return { exito: false, error: error };
+    }
   }
 };
