@@ -26,7 +26,7 @@ export default function DashboardAlumno() {
   // ==========================================
   const [activeTab, setActiveTab] = useState('operacion');
   const [viajes, setViajes] = useState([]);
-  const [listaOPTs, setListaOPTs] = useState([]); // Cargará desde cat_tutores
+  const [listaOPTs, setListaOPTs] = useState([]); 
   const [materiales, setMateriales] = useState([]);
   const [catUnidades, setCatUnidades] = useState([]);
   const [catLideres, setCatLideres] = useState([]);
@@ -43,7 +43,7 @@ export default function DashboardAlumno() {
   const [kmInicial, setKmInicial] = useState('');
   const [kmFinal, setKmFinal] = useState('');
   
-  // NUEVOS ESTADOS: Horarios Manuales
+  // Horarios Manuales
   const [horaInicioManual, setHoraInicioManual] = useState('');
   const [horaFinManual, setHoraFinManual] = useState('');
   
@@ -77,9 +77,8 @@ export default function DashboardAlumno() {
         setUsuarioActual(user);
         setEtapaActual(user.etapa_actual || 'Prueba Intermedia');
 
-        // Descarga optimizada de datos
         const [misViajes, todosMateriales, catalogos] = await Promise.all([
-          dataService.obtainViajesPorAlumno ? dataService.obtainViajesPorAlumno(user.id) : dataService.obtenerViajesPorAlumno(user.id),
+          dataService.obtenerViajesPorAlumno ? dataService.obtenerViajesPorAlumno(user.id) : dataService.obtenerViajes(user.id),
           dataService.obtenerMaterialEstudio(),
           dataService.obtenerCatalogos()
         ]);
@@ -87,11 +86,10 @@ export default function DashboardAlumno() {
         setViajes(misViajes || []);
         setMateriales(todosMateriales ? todosMateriales.filter(m => m.dirigido_a === 'Alumno' || m.dirigido_a === 'Ambos' || !m.dirigido_a) : []);
         
-        // Mapeo directo y seguro de catálogos para evitar caídas
         setCatUnidades(catalogos?.unidades || []);
         setCatLideres(catalogos?.lideres || []);
         setCatGerentes(catalogos?.gerentes || []);
-        setListaOPTs(catalogos?.tutores || []); // Mapea directo desde la tabla limpia cat_tutores
+        setListaOPTs(catalogos?.tutores || []); 
 
         if (user.etapa_actual === 'OPT' && (!user.unidad_negocio || !user.lider || !user.gerente)) {
           setMostrarModalActualizacion(true);
@@ -274,13 +272,12 @@ export default function DashboardAlumno() {
       
       if (kmRecorridos < 0) return alert("El hodómetro final no puede ser menor al inicial.");
       
-      // Cálculo del tiempo basado en las horas manuales introducidas
       let mins = 0;
       if (viajeOriginal?.hora_inicio_manual && horaFinManual) {
         const [hIn, mIn] = viajeOriginal.hora_inicio_manual.split(':').map(Number);
         const [hFi, mFi] = horaFinManual.split(':').map(Number);
         let diffMins = (hFi * 60 + mFi) - (hIn * 60 + mIn);
-        if (diffMins < 0) diffMins += 24 * 60; // Por si cruza la medianoche
+        if (diffMins < 0) diffMins += 24 * 60; 
         mins = diffMins;
       }
 
@@ -303,7 +300,7 @@ export default function DashboardAlumno() {
         setFotoArchivoFisico(null); setFotoPrevisualizacion(null);
         setKmInicial(''); setKmFinal(''); setHoraInicioManual(''); setHoraFinManual('');
         
-        const nuevosViajes = await dataService.obtenerViajesPorAlumno(usuarioActual.id);
+        const nuevosViajes = await (dataService.obtenerViajesPorAlumno ? dataService.obtenerViajesPorAlumno(usuarioActual.id) : dataService.obtenerViajes(usuarioActual.id));
         setViajes(nuevosViajes || []);
       } else {
         alert("Error al registrar en base de datos: " + dbError.message);
@@ -328,22 +325,53 @@ export default function DashboardAlumno() {
     } catch(err) { alert("Error de conexión: " + err.message); }
   };
 
-  const kmTotales = viajes ? viajes.reduce((acc, v) => acc + (parseFloat(v.km_recorridos) || 0), 0) : 0;
-  const xpInfo = kmTotales >= 4000 ? { nivel: 'Experto', progreso: 100 } : kmTotales >= 1500 ? { nivel: 'Intermedio', progreso: ((kmTotales - 1500) / 2500) * 100 } : { nivel: 'Novato', progreso: (kmTotales / 1500) * 100 };
-
   if (cargandoDatos) return <div style={{color: '#fff', textAlign: 'center', padding: '50px'}}>Sincronizando Sistema...</div>;
 
-  let kmRestantesVisuales = kmTotales;
+  // ======================================================================
+  // NUEVO MOTOR: AGRUPACIÓN CRONOLÓGICA (SEMANAS REALES, NO CASCADA)
+  // ======================================================================
+  let fechaBase = null;
+  if (usuarioActual && (usuarioActual.fecha_entrega_operacion || usuarioActual.fecha_inicio_opt)) {
+      fechaBase = usuarioActual.fecha_entrega_operacion || usuarioActual.fecha_inicio_opt;
+  } else if (viajes && viajes.length > 0) {
+      // Si no hay fecha de alta oficial, usamos el día del primer viaje de la historia del operador
+      const viajesOrdenados = [...viajes].sort((a,b) => new Date(a.hora_inicio) - new Date(b.hora_inicio));
+      fechaBase = viajesOrdenados[0].hora_inicio;
+  } else {
+      fechaBase = new Date().toISOString();
+  }
 
+  // Creamos 8 cajones vacíos para las 8 semanas
+  const kmPorSemana = Array(8).fill(0);
+  
+  if (fechaBase && viajes) {
+      const msInicio = new Date(fechaBase).getTime();
+      viajes.forEach(v => {
+          const msViaje = new Date(v.hora_inicio || v.fecha_registro).getTime();
+          let diasTranscurridos = Math.floor((msViaje - msInicio) / (1000 * 60 * 60 * 24));
+          if (diasTranscurridos < 0) diasTranscurridos = 0;
+          
+          let indiceSemana = Math.floor(diasTranscurridos / 7);
+          if (indiceSemana > 7) indiceSemana = 7; // Si pasa de 8 semanas, todo se va al último cajón
+          
+          kmPorSemana[indiceSemana] += (parseFloat(v.km_recorridos) || 0);
+      });
+  }
+
+  // Lógica de Vencimiento de Certificación
   let diasDesdeEntrega = 0;
   let diasAtrasoCertificacion = 0;
-  if (usuarioActual && (usuarioActual.fecha_entrega_operacion || usuarioActual.fecha_inicio_opt)) {
-      const fechaInicioReal = usuarioActual.fecha_entrega_operacion || usuarioActual.fecha_inicio_opt;
-      diasDesdeEntrega = Math.floor((new Date().getTime() - new Date(fechaInicioReal).getTime()) / (1000 * 60 * 60 * 24));
+  if (fechaBase) {
+      diasDesdeEntrega = Math.floor((new Date().getTime() - new Date(fechaBase).getTime()) / (1000 * 60 * 60 * 24));
       if (diasDesdeEntrega >= 56 && etapaActual !== 'Certificado') {
         diasAtrasoCertificacion = diasDesdeEntrega - 56;
       }
   }
+
+  // Cálculo de XP e Información General (Esto suma todo el historial real)
+  const kmTotales = viajes ? viajes.reduce((acc, v) => acc + (parseFloat(v.km_recorridos) || 0), 0) : 0;
+  const xpInfo = kmTotales >= 4000 ? { nivel: 'Experto', progreso: 100 } : kmTotales >= 1500 ? { nivel: 'Intermedio', progreso: ((kmTotales - 1500) / 2500) * 100 } : { nivel: 'Novato', progreso: (kmTotales / 1500) * 100 };
+  // ======================================================================
 
   return (
     <div style={{ padding: '20px', color: '#e2e8f0', fontFamily: 'system-ui' }}>
@@ -526,18 +554,25 @@ export default function DashboardAlumno() {
                 )}
 
                 {metasUDAT.map((m, idx) => {
-                  const kmEstaSemana = Math.min(kmRestantesVisuales, m.km);
-                  kmRestantesVisuales = Math.max(0, kmRestantesVisuales - kmEstaSemana);
-                  const pct = Math.min((kmEstaSemana / m.km) * 100, 100);
+                  const kmEstaSemana = kmPorSemana[idx];
+                  const pct = (kmEstaSemana / m.km) * 100;
+                  const superoMeta = kmEstaSemana >= m.km;
                   
+                  // Aquí está la leyenda de la meta superada exacta que pediste
+                  const textoKM = superoMeta 
+                    ? `¡Meta Alcanzada! ${kmEstaSemana.toFixed(0)} / ${m.km} KM` 
+                    : `${kmEstaSemana.toFixed(0)} KM (${pct.toFixed(0)}%)`;
+
                   return (
-                    <div key={idx} style={{ marginBottom: '15px', background: '#0f172a', padding: '12px', borderRadius: '8px', border: pct >= 100 ? '1px solid #10b981' : '1px solid #334155' }}>
+                    <div key={idx} style={{ marginBottom: '15px', background: '#0f172a', padding: '12px', borderRadius: '8px', border: superoMeta ? '1px solid #10b981' : '1px solid #334155' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '5px' }}>
-                        <span style={{ fontWeight: 'bold', color: pct >= 100 ? '#10b981' : '#fff' }}>Semana {m.sem} (Meta: {m.km} KM)</span>
-                        <span style={{ color: '#94a3b8' }}>{kmEstaSemana.toFixed(0)} KM ({pct.toFixed(0)}%)</span>
+                        <span style={{ fontWeight: 'bold', color: superoMeta ? '#10b981' : '#fff' }}>Semana {m.sem} (Meta: {m.km} KM)</span>
+                        <span style={{ color: superoMeta ? '#10b981' : '#94a3b8', fontWeight: superoMeta ? 'bold' : 'normal' }}>
+                          {textoKM}
+                        </span>
                       </div>
                       <div style={{ background: '#334155', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ background: pct >= 100 ? '#10b981' : '#38bdf8', height: '100%', width: `${pct}%`, transition: 'width 0.5s ease-in-out' }}></div>
+                        <div style={{ background: superoMeta ? '#10b981' : '#38bdf8', height: '100%', width: `${Math.min(pct, 100)}%`, transition: 'width 0.5s ease-in-out' }}></div>
                       </div>
                     </div>
                   );
