@@ -26,7 +26,7 @@ export default function DashboardAlumno() {
   // ==========================================
   const [activeTab, setActiveTab] = useState('operacion');
   const [viajes, setViajes] = useState([]);
-  const [listaOPTs, setListaOPTs] = useState([]);
+  const [listaOPTs, setListaOPTs] = useState([]); // Cargará desde cat_tutores
   const [materiales, setMateriales] = useState([]);
   const [catUnidades, setCatUnidades] = useState([]);
   const [catLideres, setCatLideres] = useState([]);
@@ -42,6 +42,10 @@ export default function DashboardAlumno() {
   const [optSeleccionado, setOptSeleccionado] = useState('');
   const [kmInicial, setKmInicial] = useState('');
   const [kmFinal, setKmFinal] = useState('');
+  
+  // NUEVOS ESTADOS: Horarios Manuales
+  const [horaInicioManual, setHoraInicioManual] = useState('');
+  const [horaFinManual, setHoraFinManual] = useState('');
   
   // Storage de Imágenes
   const [fotoArchivoFisico, setFotoArchivoFisico] = useState(null);
@@ -64,7 +68,6 @@ export default function DashboardAlumno() {
   ];
 
   useEffect(() => {
-    // Función asíncrona interna para evitar el error de Vite al compilar
     const cargarTodo = async () => { 
       try {
         const session = localStorage.getItem('udat_app_session');
@@ -74,30 +77,31 @@ export default function DashboardAlumno() {
         setUsuarioActual(user);
         setEtapaActual(user.etapa_actual || 'Prueba Intermedia');
 
-        // Optimización: Descargamos únicamente los viajes de este alumno
-        const [misViajes, todosUsuarios, todosMateriales, catalogos] = await Promise.all([
-          dataService.obtenerViajesPorAlumno(user.id),
-          dataService.obtenerUsuarios(),
+        // Descarga optimizada de datos
+        const [misViajes, todosMateriales, catalogos] = await Promise.all([
+          dataService.obtainViajesPorAlumno ? dataService.obtainViajesPorAlumno(user.id) : dataService.obtenerViajesPorAlumno(user.id),
           dataService.obtenerMaterialEstudio(),
           dataService.obtenerCatalogos()
         ]);
 
-        setViajes(misViajes);
-        setListaOPTs(todosUsuarios.filter(u => u.rol === 'Tutor'));
-        setMateriales(todosMateriales.filter(m => m.dirigido_a === 'Alumno' || m.dirigido_a === 'Ambos' || !m.dirigido_a));
+        setViajes(misViajes || []);
+        setMateriales(todosMateriales ? todosMateriales.filter(m => m.dirigido_a === 'Alumno' || m.dirigido_a === 'Ambos' || !m.dirigido_a) : []);
         
+        // Mapeo directo y seguro de catálogos para evitar caídas
         setCatUnidades(catalogos?.unidades || []);
         setCatLideres(catalogos?.lideres || []);
         setCatGerentes(catalogos?.gerentes || []);
+        setListaOPTs(catalogos?.tutores || []); // Mapea directo desde la tabla limpia cat_tutores
 
         if (user.etapa_actual === 'OPT' && (!user.unidad_negocio || !user.lider || !user.gerente)) {
           setMostrarModalActualizacion(true);
         }
 
-        const viajeAbierto = misViajes.find(v => v.hora_fin === null);
+        const viajeAbierto = misViajes?.find(v => v.hora_fin === null);
         if (viajeAbierto) {
           setIdViajeActivo(viajeAbierto.id);
           setEstadoViaje('progreso');
+          if(viajeAbierto.hora_inicio_manual) setHoraInicioManual(viajeAbierto.hora_inicio_manual);
         }
       } catch (error) {
         console.error("Error al sincronizar datos:", error);
@@ -106,7 +110,7 @@ export default function DashboardAlumno() {
       }
     };
 
-    cargarTodo(); // Llamada de ejecución segura
+    cargarTodo();
   }, [navigate]);
 
   useEffect(() => {
@@ -115,9 +119,6 @@ export default function DashboardAlumno() {
     }
   }, [etapaActual]);
 
-  // ==========================================
-  // FUNCIONES DE LAS NUEVAS ETAPAS 
-  // ==========================================
   const registrarPruebaIntermedia = async (resultado) => {
     if (resultado === 'No' && !motivoFallo) return alert("Por favor, explica qué sucedió para que podamos ayudarte.");
     const nuevaEtapa = resultado === 'Si' ? 'Induccion' : 'Prueba Fallida';
@@ -166,10 +167,7 @@ export default function DashboardAlumno() {
 
   const guardarActualizacionPerfil = async () => {
     if (!formActualizacion.unidad_negocio || !formActualizacion.lider || !formActualizacion.gerente) {
-      return alert("Unidad, Líder y Gerente son obligatorios. (El Tutor puede quedar vacío).");
-    }
-    if (!usuarioActual || !usuarioActual.id) {
-      return alert("Error crítico: No se detectó tu sesión. Cierra sesión y vuelve a entrar.");
+      return alert("Unidad, Líder y Gerente son obligatorios.");
     }
     
     try {
@@ -192,9 +190,6 @@ export default function DashboardAlumno() {
     }
   };
 
-  // ==========================================
-  // OPERACIÓN EN RUTA OPT Y SUPABASE STORAGE
-  // ==========================================
   const marcarAsistencia = () => {
     if (!navigator.geolocation) return alert("❌ Tu dispositivo no soporta GPS.");
     setRegistrandoAsistencia(true);
@@ -233,14 +228,17 @@ export default function DashboardAlumno() {
 
   const iniciarRuta = async () => {
     if (!asistenciaEnviada) return alert("⚠️ CANDADO: Primero registra tu Asistencia con GPS.");
+    if (!optSeleccionado) return alert("Selecciona el tutor que te acompaña hoy.");
     if (!kmInicial) return alert("Captura el hodómetro inicial.");
+    if (!horaInicioManual) return alert("Por favor, ingresa la hora de inicio de la ruta.");
     
     try {
       const payload = {
         id_alumno: usuarioActual.id, 
-        nombre_opt: optSeleccionado || 'Sin Tutor Asignado',
+        nombre_opt: optSeleccionado,
         km_iniciales: parseFloat(kmInicial), 
-        hora_inicio: new Date().toISOString()
+        hora_inicio: new Date().toISOString(),
+        hora_inicio_manual: horaInicioManual
       };
       
       const { data, error } = await supabase.from('viajes_diarios').insert([payload]).select();
@@ -249,14 +247,14 @@ export default function DashboardAlumno() {
         setIdViajeActivo(data[0].id); 
         setEstadoViaje('progreso');
       } else {
-        alert("Error al abrir la bitácora. Asegúrate de desactivar RLS en 'viajes_diarios': " + (error?.message || ''));
+        alert("Error al abrir la bitácora: " + (error?.message || ''));
       }
     } catch(err) { alert("Error al iniciar ruta: " + err.message); }
   };
 
   const finalizarRuta = async () => {
-    if (!kmFinal || !fotoArchivoFisico || !evalTrato || !evalInstruccion) {
-      return alert("⚠️ CANDADO: Foto del odómetro y evaluación de la ruta son obligatorios.");
+    if (!kmFinal || !fotoArchivoFisico || !evalTrato || !evalInstruccion || !horaFinManual) {
+      return alert("⚠️ CANDADO: Hora de fin, foto del odómetro y evaluación de la ruta son obligatorios.");
     }
     try {
       let urlFotoPublica = '';
@@ -265,7 +263,7 @@ export default function DashboardAlumno() {
       const fileName = `${usuarioActual.id}-${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage.from('evidencias').upload(`odometros/${fileName}`, fotoArchivoFisico);
-      if (uploadError) return alert("Error al subir la imagen a la nube corporativa: " + uploadError.message);
+      if (uploadError) return alert("Error al subir la imagen: " + uploadError.message);
       
       const publicUrlResponse = supabase.storage.from('evidencias').getPublicUrl(`odometros/${fileName}`);
       urlFotoPublica = publicUrlResponse.data?.publicUrl || publicUrlResponse.publicURL || '';
@@ -275,11 +273,20 @@ export default function DashboardAlumno() {
       const kmRecorridos = parseFloat(kmFinal) - baseKm;
       
       if (kmRecorridos < 0) return alert("El hodómetro final no puede ser menor al inicial.");
-      const horaInicio = viajeOriginal ? new Date(viajeOriginal.hora_inicio).getTime() : new Date().getTime();
-      const mins = Math.floor((new Date().getTime() - horaInicio) / 60000);
+      
+      // Cálculo del tiempo basado en las horas manuales introducidas
+      let mins = 0;
+      if (viajeOriginal?.hora_inicio_manual && horaFinManual) {
+        const [hIn, mIn] = viajeOriginal.hora_inicio_manual.split(':').map(Number);
+        const [hFi, mFi] = horaFinManual.split(':').map(Number);
+        let diffMins = (hFi * 60 + mFi) - (hIn * 60 + mIn);
+        if (diffMins < 0) diffMins += 24 * 60; // Por si cruza la medianoche
+        mins = diffMins;
+      }
 
       const payload = {
         hora_fin: new Date().toISOString(),
+        hora_fin_manual: horaFinManual,
         km_finales: parseFloat(kmFinal),
         km_recorridos: kmRecorridos,
         tiempo_total_minutos: mins,
@@ -291,14 +298,13 @@ export default function DashboardAlumno() {
 
       const { error: dbError } = await supabase.from('viajes_diarios').update(payload).eq('id', idViajeActivo);
       if (!dbError) {
-        alert(`✓ ¡Reporte Enviado!\nRecorriste: ${kmRecorridos} KM.\nTu imagen se guardó en el Storage.`);
+        alert(`✓ ¡Reporte Enviado!\nRecorriste: ${kmRecorridos} KM en ${mins} minutos.\nTu evidencia se guardó correctamente.`);
         setEstadoViaje('reposo'); setIdViajeActivo(null); 
         setFotoArchivoFisico(null); setFotoPrevisualizacion(null);
-        setKmInicial(''); setKmFinal('');
+        setKmInicial(''); setKmFinal(''); setHoraInicioManual(''); setHoraFinManual('');
         
-        // Optimización: Recargamos únicamente los viajes de este alumno tras finalizar ruta
         const nuevosViajes = await dataService.obtenerViajesPorAlumno(usuarioActual.id);
-        setViajes(nuevosViajes);
+        setViajes(nuevosViajes || []);
       } else {
         alert("Error al registrar en base de datos: " + dbError.message);
       }
@@ -322,14 +328,13 @@ export default function DashboardAlumno() {
     } catch(err) { alert("Error de conexión: " + err.message); }
   };
 
-  const kmTotales = viajes.reduce((acc, v) => acc + (parseFloat(v.km_recorridos) || 0), 0);
+  const kmTotales = viajes ? viajes.reduce((acc, v) => acc + (parseFloat(v.km_recorridos) || 0), 0) : 0;
   const xpInfo = kmTotales >= 4000 ? { nivel: 'Experto', progreso: 100 } : kmTotales >= 1500 ? { nivel: 'Intermedio', progreso: ((kmTotales - 1500) / 2500) * 100 } : { nivel: 'Novato', progreso: (kmTotales / 1500) * 100 };
 
   if (cargandoDatos) return <div style={{color: '#fff', textAlign: 'center', padding: '50px'}}>Sincronizando Sistema...</div>;
 
   let kmRestantesVisuales = kmTotales;
 
-  // LÓGICA DE VENCIMIENTO DEL ALUMNO (8 Semanas)
   let diasDesdeEntrega = 0;
   let diasAtrasoCertificacion = 0;
   if (usuarioActual && (usuarioActual.fecha_entrega_operacion || usuarioActual.fecha_inicio_opt)) {
@@ -417,7 +422,7 @@ export default function DashboardAlumno() {
                         </select>
                         <select value={formActualizacion.tutor} onChange={(e) => setFormActualizacion({...formActualizacion, tutor: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '25px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }}>
                             <option value="">-- Selecciona Tutor OPT (Opcional) --</option>
-                            {listaOPTs.map((t) => <option key={t.id} value={t.nombre_completo}>{t.nombre_completo}</option>)}
+                            {listaOPTs.map((t, i) => <option key={`tut-${i}`} value={t.nombre}>{t.nombre}</option>)}
                         </select>
 
                         <button onClick={guardarActualizacionPerfil} style={{ width: '100%', padding: '14px', background: '#0284c7', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Guardar e Iniciar Operación</button>
@@ -461,11 +466,18 @@ export default function DashboardAlumno() {
                     
                     {estadoViaje === 'inicio' && (
                         <div>
+                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#94a3b8' }}>Selecciona tu Tutor:</label>
                             <select value={optSeleccionado} onChange={(e) => setOptSeleccionado(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '15px', background: '#0f172a', color: '#fff', border: '1px solid #334155' }}>
                                 <option value="">¿Quién es tu tutor hoy?</option>
-                                {listaOPTs.map(t => <option key={t.id} value={t.nombre_completo}>{t.nombre_completo}</option>)}
+                                {listaOPTs.map((t, i) => <option key={`tut-sel-${i}`} value={t.nombre}>{t.nombre}</option>)}
                             </select>
+
+                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#94a3b8' }}>Lectura del Odómetro Inicial:</label>
                             <input type="number" value={kmInicial} onChange={(e) => setKmInicial(e.target.value)} placeholder="Hodómetro Inicial en Tablero" style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '15px', background: '#0f172a', color: '#fff', border: '1px solid #334155', boxSizing: 'border-box' }} />
+                            
+                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#94a3b8' }}>Hora de Inicio Manual:</label>
+                            <input type="time" value={horaInicioManual} onChange={(e) => setHoraInicioManual(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '15px', background: '#0f172a', color: '#fff', border: '1px solid #334155', boxSizing: 'border-box' }} />
+                            
                             <button onClick={iniciarRuta} style={{ width: '100%', padding: '12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Iniciar Ruta</button>
                         </div>
                     )}
@@ -479,9 +491,13 @@ export default function DashboardAlumno() {
 
                     {estadoViaje === 'cierre' && (
                         <div>
+                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#94a3b8' }}>Lectura del Odómetro Final:</label>
                             <input type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} placeholder="Hodómetro Final" style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '15px', background: '#0f172a', color: '#fff', border: '1px solid #334155', boxSizing: 'border-box' }} />
                             
-                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#f59e0b', fontWeight: 'bold' }}>📸 Subir Evidencia al Servidor (Obligatorio):</label>
+                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#94a3b8' }}>Hora de Fin Manual:</label>
+                            <input type="time" value={horaFinManual} onChange={(e) => setHoraFinManual(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '15px', background: '#0f172a', color: '#fff', border: '1px solid #334155', boxSizing: 'border-box' }} />
+
+                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#f59e0b', fontWeight: 'bold' }}>📸 Foto del Hodómetro (Evidencia Obligatoria):</label>
                             <input type="file" accept="image/*" onChange={procesarFotoOdometro} style={{ marginBottom: '15px', display: 'block', width: '100%', color: '#94a3b8' }} />
                             {fotoPrevisualizacion && <img src={fotoPrevisualizacion} style={{ width: '100%', maxWidth: '250px', borderRadius: '6px', border: '1px solid #334155', marginBottom: '15px', display: 'block' }} alt="Evidencia" />}
 
@@ -502,7 +518,6 @@ export default function DashboardAlumno() {
               <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', animation: 'fadeIn 0.3s' }}>
                 <h3 style={{ marginTop: 0, borderBottom: '1px solid #334155', paddingBottom: '10px' }}>Avance Escalonado de Metas</h3>
                 
-                {/* BANNER DE VENCIMIENTO DE CERTIFICACIÓN */}
                 {diasAtrasoCertificacion > 0 && (
                   <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', padding: '15px', borderRadius: '8px', marginBottom: '20px', color: '#fca5a5' }}>
                     <h4 style={{ margin: '0 0 5px 0', color: '#ef4444' }}>⚠️ TIEMPO DE PRUEBA EXCEDIDO</h4>
