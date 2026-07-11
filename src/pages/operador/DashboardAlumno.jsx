@@ -47,7 +47,9 @@ export default function DashboardAlumno() {
   const [horaInicioManual, setHoraInicioManual] = useState('');
   const [horaFinManual, setHoraFinManual] = useState('');
   
-  // Storage de Imágenes
+  // Storage de Imágenes (INICIO Y FIN)
+  const [fotoInicioArchivoFisico, setFotoInicioArchivoFisico] = useState(null);
+  const [fotoInicioPrevisualizacion, setFotoInicioPrevisualizacion] = useState(null);
   const [fotoArchivoFisico, setFotoArchivoFisico] = useState(null);
   const [fotoPrevisualizacion, setFotoPrevisualizacion] = useState(null);
 
@@ -214,6 +216,18 @@ export default function DashboardAlumno() {
     );
   };
 
+  // Procesar Foto INICIAL
+  const procesarFotoInicio = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFotoInicioArchivoFisico(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setFotoInicioPrevisualizacion(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Procesar Foto FINAL
   const procesarFotoOdometro = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -229,14 +243,29 @@ export default function DashboardAlumno() {
     if (!optSeleccionado) return alert("Selecciona el tutor que te acompaña hoy.");
     if (!kmInicial) return alert("Captura el hodómetro inicial.");
     if (!horaInicioManual) return alert("Por favor, ingresa la hora de inicio de la ruta.");
+    if (!fotoInicioArchivoFisico) return alert("⚠️ CANDADO: La foto del odómetro inicial es OBLIGATORIA para arrancar el viaje.");
     
     try {
+      // 1. Subir la Foto Inicial a Supabase Storage
+      let urlFotoInicioPublica = '';
+      const tieneExtension = fotoInicioArchivoFisico.name.includes('.');
+      const fileExt = tieneExtension ? fotoInicioArchivoFisico.name.split('.').pop() : 'jpg';
+      const fileName = `inicio-${usuarioActual.id}-${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage.from('evidencias').upload(`odometros/${fileName}`, fotoInicioArchivoFisico);
+      if (uploadError) return alert("Error al subir la imagen inicial corporativa: " + uploadError.message);
+      
+      const publicUrlResponse = supabase.storage.from('evidencias').getPublicUrl(`odometros/${fileName}`);
+      urlFotoInicioPublica = publicUrlResponse.data?.publicUrl || publicUrlResponse.publicURL || '';
+
+      // 2. Crear la Bitácora de Viaje
       const payload = {
         id_alumno: usuarioActual.id, 
         nombre_opt: optSeleccionado,
         km_iniciales: parseFloat(kmInicial), 
         hora_inicio: new Date().toISOString(),
-        hora_inicio_manual: horaInicioManual
+        hora_inicio_manual: horaInicioManual,
+        foto_inicio_url: urlFotoInicioPublica // Aquí guardamos el enlace
       };
       
       const { data, error } = await supabase.from('viajes_diarios').insert([payload]).select();
@@ -244,6 +273,7 @@ export default function DashboardAlumno() {
       if (!error && data && data.length > 0) {
         setIdViajeActivo(data[0].id); 
         setEstadoViaje('progreso');
+        alert("✓ ¡Foto procesada y ruta iniciada con éxito!");
       } else {
         alert("Error al abrir la bitácora: " + (error?.message || ''));
       }
@@ -252,16 +282,16 @@ export default function DashboardAlumno() {
 
   const finalizarRuta = async () => {
     if (!kmFinal || !fotoArchivoFisico || !evalTrato || !evalInstruccion || !horaFinManual) {
-      return alert("⚠️ CANDADO: Hora de fin, foto del odómetro y evaluación de la ruta son obligatorios.");
+      return alert("⚠️ CANDADO: Hora de fin, foto del odómetro de cierre y evaluación de la ruta son obligatorios.");
     }
     try {
       let urlFotoPublica = '';
       const tieneExtension = fotoArchivoFisico.name.includes('.');
       const fileExt = tieneExtension ? fotoArchivoFisico.name.split('.').pop() : 'jpg';
-      const fileName = `${usuarioActual.id}-${Date.now()}.${fileExt}`;
+      const fileName = `fin-${usuarioActual.id}-${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage.from('evidencias').upload(`odometros/${fileName}`, fotoArchivoFisico);
-      if (uploadError) return alert("Error al subir la imagen: " + uploadError.message);
+      if (uploadError) return alert("Error al subir la imagen de cierre: " + uploadError.message);
       
       const publicUrlResponse = supabase.storage.from('evidencias').getPublicUrl(`odometros/${fileName}`);
       urlFotoPublica = publicUrlResponse.data?.publicUrl || publicUrlResponse.publicURL || '';
@@ -297,7 +327,10 @@ export default function DashboardAlumno() {
       if (!dbError) {
         alert(`✓ ¡Reporte Enviado!\nRecorriste: ${kmRecorridos} KM en ${mins} minutos.\nTu evidencia se guardó correctamente.`);
         setEstadoViaje('reposo'); setIdViajeActivo(null); 
+        
+        // Limpiamos TODAS las fotos y campos
         setFotoArchivoFisico(null); setFotoPrevisualizacion(null);
+        setFotoInicioArchivoFisico(null); setFotoInicioPrevisualizacion(null);
         setKmInicial(''); setKmFinal(''); setHoraInicioManual(''); setHoraFinManual('');
         
         const nuevosViajes = await (dataService.obtenerViajesPorAlumno ? dataService.obtenerViajesPorAlumno(usuarioActual.id) : dataService.obtenerViajes(usuarioActual.id));
@@ -327,21 +360,16 @@ export default function DashboardAlumno() {
 
   if (cargandoDatos) return <div style={{color: '#fff', textAlign: 'center', padding: '50px'}}>Sincronizando Sistema...</div>;
 
-  // ======================================================================
-  // NUEVO MOTOR: AGRUPACIÓN CRONOLÓGICA (SEMANAS REALES, NO CASCADA)
-  // ======================================================================
   let fechaBase = null;
   if (usuarioActual && (usuarioActual.fecha_entrega_operacion || usuarioActual.fecha_inicio_opt)) {
       fechaBase = usuarioActual.fecha_entrega_operacion || usuarioActual.fecha_inicio_opt;
   } else if (viajes && viajes.length > 0) {
-      // Si no hay fecha de alta oficial, usamos el día del primer viaje de la historia del operador
       const viajesOrdenados = [...viajes].sort((a,b) => new Date(a.hora_inicio) - new Date(b.hora_inicio));
       fechaBase = viajesOrdenados[0].hora_inicio;
   } else {
       fechaBase = new Date().toISOString();
   }
 
-  // Creamos 8 cajones vacíos para las 8 semanas
   const kmPorSemana = Array(8).fill(0);
   
   if (fechaBase && viajes) {
@@ -352,13 +380,12 @@ export default function DashboardAlumno() {
           if (diasTranscurridos < 0) diasTranscurridos = 0;
           
           let indiceSemana = Math.floor(diasTranscurridos / 7);
-          if (indiceSemana > 7) indiceSemana = 7; // Si pasa de 8 semanas, todo se va al último cajón
+          if (indiceSemana > 7) indiceSemana = 7; 
           
           kmPorSemana[indiceSemana] += (parseFloat(v.km_recorridos) || 0);
       });
   }
 
-  // Lógica de Vencimiento de Certificación
   let diasDesdeEntrega = 0;
   let diasAtrasoCertificacion = 0;
   if (fechaBase) {
@@ -368,10 +395,8 @@ export default function DashboardAlumno() {
       }
   }
 
-  // Cálculo de XP e Información General (Esto suma todo el historial real)
   const kmTotales = viajes ? viajes.reduce((acc, v) => acc + (parseFloat(v.km_recorridos) || 0), 0) : 0;
   const xpInfo = kmTotales >= 4000 ? { nivel: 'Experto', progreso: 100 } : kmTotales >= 1500 ? { nivel: 'Intermedio', progreso: ((kmTotales - 1500) / 2500) * 100 } : { nivel: 'Novato', progreso: (kmTotales / 1500) * 100 };
-  // ======================================================================
 
   return (
     <div style={{ padding: '20px', color: '#e2e8f0', fontFamily: 'system-ui' }}>
@@ -506,6 +531,11 @@ export default function DashboardAlumno() {
                             <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#94a3b8' }}>Hora de Inicio Manual:</label>
                             <input type="time" value={horaInicioManual} onChange={(e) => setHoraInicioManual(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '15px', background: '#0f172a', color: '#fff', border: '1px solid #334155', boxSizing: 'border-box' }} />
                             
+                            {/* NUEVO: FOTO DE INICIO DE RUTA */}
+                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#f59e0b', fontWeight: 'bold' }}>📸 Foto de Salida (Evidencia Obligatoria):</label>
+                            <input type="file" accept="image/*" onChange={procesarFotoInicio} style={{ marginBottom: '15px', display: 'block', width: '100%', color: '#94a3b8' }} />
+                            {fotoInicioPrevisualizacion && <img src={fotoInicioPrevisualizacion} style={{ width: '100%', maxWidth: '250px', borderRadius: '6px', border: '1px solid #334155', marginBottom: '15px', display: 'block' }} alt="Evidencia de Salida" />}
+
                             <button onClick={iniciarRuta} style={{ width: '100%', padding: '12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Iniciar Ruta</button>
                         </div>
                     )}
@@ -525,9 +555,9 @@ export default function DashboardAlumno() {
                             <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#94a3b8' }}>Hora de Fin Manual:</label>
                             <input type="time" value={horaFinManual} onChange={(e) => setHoraFinManual(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', marginBottom: '15px', background: '#0f172a', color: '#fff', border: '1px solid #334155', boxSizing: 'border-box' }} />
 
-                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#f59e0b', fontWeight: 'bold' }}>📸 Foto del Hodómetro (Evidencia Obligatoria):</label>
+                            <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#f59e0b', fontWeight: 'bold' }}>📸 Foto de Llegada (Evidencia Obligatoria):</label>
                             <input type="file" accept="image/*" onChange={procesarFotoOdometro} style={{ marginBottom: '15px', display: 'block', width: '100%', color: '#94a3b8' }} />
-                            {fotoPrevisualizacion && <img src={fotoPrevisualizacion} style={{ width: '100%', maxWidth: '250px', borderRadius: '6px', border: '1px solid #334155', marginBottom: '15px', display: 'block' }} alt="Evidencia" />}
+                            {fotoPrevisualizacion && <img src={fotoPrevisualizacion} style={{ width: '100%', maxWidth: '250px', borderRadius: '6px', border: '1px solid #334155', marginBottom: '15px', display: 'block' }} alt="Evidencia de Llegada" />}
 
                             <div style={{ background: '#0f172a', padding: '15px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #334155' }}>
                                 <h4 style={{ margin: '0 0 10px 0', color: '#38bdf8' }}>Evaluación del Viaje</h4>
@@ -558,7 +588,6 @@ export default function DashboardAlumno() {
                   const pct = (kmEstaSemana / m.km) * 100;
                   const superoMeta = kmEstaSemana >= m.km;
                   
-                  // Aquí está la leyenda de la meta superada exacta que pediste
                   const textoKM = superoMeta 
                     ? `¡Meta Alcanzada! ${kmEstaSemana.toFixed(0)} / ${m.km} KM` 
                     : `${kmEstaSemana.toFixed(0)} KM (${pct.toFixed(0)}%)`;

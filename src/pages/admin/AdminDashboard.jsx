@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart, Line } from 'recharts';
-import { Database, Upload, ShieldAlert, Users, Truck, Activity, UserPlus, Clock, BookOpen, BarChart3, AlertCircle, MapPin, Target } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { Database, Upload, ShieldAlert, Users, MapPin, Target, BarChart3, UserPlus, BookOpen } from 'lucide-react';
 import { supabase } from "../../services/supabaseClient";
 
 export default function AdminDashboard() {
@@ -17,8 +17,13 @@ export default function AdminDashboard() {
   const [viajes, setViajes] = useState([]);
   const [encuestas360, setEncuestas360] = useState([]);
   const [registrosInduccion, setRegistrosInduccion] = useState([]);
+  
+  // Estados para los Catálogos Dinámicos
+  const [catUnidades, setCatUnidades] = useState([]);
+  const [catLideres, setCatLideres] = useState([]);
+  const [catGerentes, setCatGerentes] = useState([]);
 
-  // Filtros Globales
+  // Filtros Globales (Ahora serán dinámicos)
   const [filtroUN, setFiltroUN] = useState('ALL');
   const [filtroGeneracion, setFiltroGeneracion] = useState('ALL');
   const [filtroGerente, setFiltroGerente] = useState('ALL');
@@ -35,21 +40,27 @@ export default function AdminDashboard() {
   const [urlMaterial, setUrlMaterial] = useState('');
   const [dirigidoA, setDirigidoA] = useState('Alumno');
 
-  // Carga de datos de infraestructura LARMEX (OPTIMIZADA ANTI-TIMEOUT)
+  // Carga de datos de infraestructura LARMEX
   const extraerInformacionSupabase = async () => {
     setCargando(true);
     try {
-      const [resU, resV, resC, resI] = await Promise.all([
+      const [resU, resV, resC, resI, resCatUn, resCatLid, resCatGer] = await Promise.all([
         supabase.from('usuarios').select('id, rol, nombre_completo, numero_empleado, unidad_negocio, gerente, lider, tutor_opt, etapa_actual, estatus, generacion, created_at, fecha_entrega_operacion, fecha_inicio_opt'),
-       supabase.from('viajes_diarios').select('id_alumno, km_recorridos, tiempo_total_minutos, hora_inicio'),
+        supabase.from('viajes_diarios').select('id_alumno, km_recorridos, tiempo_total_minutos, hora_inicio'),
         supabase.from('encuestas').select('id_alumno, calificacion_general'),
-        supabase.from('registros_induccion').select('*')
+        supabase.from('registros_induccion').select('*'),
+        supabase.from('cat_unidades').select('nombre'),
+        supabase.from('cat_lideres').select('nombre'),
+        supabase.from('cat_gerentes').select('nombre')
       ]);
 
       if (!resU.error) setUsuarios(resU.data || []);
       if (!resV.error) setViajes(resV.data || []);
       if (!resC.error) setEncuestas360(resC.data || []);
       if (!resI.error) setRegistrosInduccion(resI.data || []);
+      if (!resCatUn.error) setCatUnidades(resCatUn.data || []);
+      if (!resCatLid.error) setCatLideres(resCatLid.data || []);
+      if (!resCatGer.error) setCatGerentes(resCatGer.data || []);
 
       setDbStatus('Online - Servidores Sincronizados');
       setDbColor('#10b981');
@@ -66,51 +77,62 @@ export default function AdminDashboard() {
     extraerInformacionSupabase();
   }, []);
 
+  // Extraer las generaciones únicas y limpias de los usuarios existentes
+  const generacionesUnicas = useMemo(() => {
+    const gens = usuarios.filter(u => u.generacion).map(u => u.generacion);
+    return [...new Set(gens)].sort();
+  }, [usuarios]);
+
   // ==========================================
-  // MANEJADORES DE ALTAS
+  // MANEJADORES DE ALTAS (Conectados a Catálogos)
   // ==========================================
   const ejecutarAltaCorporativa = async (e) => {
     e.preventDefault();
     setSubiendo(true);
     try {
-      let payload = {};
       if (tipoAlta === 'Alumno') {
         if (!formAlumno.matricula || !formAlumno.nombre_completo || !formAlumno.celular || !formAlumno.generacion || !formAlumno.fecha_entrega_empresa) {
-          setSubiendo(false);
-          return alert("⚠️ Todos los campos del alumno (Matrícula, Celular, Nombre, Generación y Fecha de Entrega) son obligatorios.");
+          setSubiendo(false); return alert("⚠️ Todos los campos del alumno son obligatorios.");
         }
-        payload = {
-          numero_empleado: formAlumno.matricula,
-          nombre_completo: formAlumno.nombre_completo,
-          telefono: formAlumno.celular,
-          generacion: formAlumno.generacion,
-          fecha_entrega_operacion: new Date(formAlumno.fecha_entrega_empresa).toISOString(),
-          rol: 'Alumno',
-          etapa_actual: 'Prueba Intermedia',
-          estatus: 'En proceso'
+        const payload = {
+          numero_empleado: formAlumno.matricula, nombre_completo: formAlumno.nombre_completo, telefono: formAlumno.celular,
+          generacion: formAlumno.generacion, fecha_entrega_operacion: new Date(formAlumno.fecha_entrega_empresa).toISOString(),
+          rol: 'Alumno', etapa_actual: 'Prueba Intermedia', estatus: 'En proceso'
         };
+        const { error } = await supabase.from('usuarios').insert([payload]);
+        if (error) throw error;
+
       } else if (tipoAlta === 'UN') {
         if (!formUN.nombre_unidad) { setSubiendo(false); return alert("Ingresa el nombre de la unidad."); }
-        payload = { nombre: formUN.nombre_unidad, tipo: 'Unidad' };
-      } else {
-        if (!formPersonal.nombre_completo) { setSubiendo(false); return alert("Ingresa el nombre completo."); }
-        payload = { nombre_completo: formPersonal.nombre_completo, rol: formPersonal.rol, unidad_negocio: formPersonal.unidad_negocio };
+        const { error } = await supabase.from('cat_unidades').insert([{ nombre: formUN.nombre_unidad }]);
+        if (error) throw error;
+
+      } else if (tipoAlta === 'Gerente') {
+        if (!formPersonal.nombre_completo) { setSubiendo(false); return alert("Ingresa el nombre del gerente."); }
+        const { error } = await supabase.from('cat_gerentes').insert([{ nombre: formPersonal.nombre_completo }]);
+        if (error) throw error;
+
+      } else if (tipoAlta === 'Lider') {
+        if (!formPersonal.nombre_completo) { setSubiendo(false); return alert("Ingresa el nombre del líder."); }
+        const { error } = await supabase.from('cat_lideres').insert([{ nombre: formPersonal.nombre_completo }]);
+        if (error) throw error;
+
+      } else if (tipoAlta === 'Staff') {
+        if (!formPersonal.nombre_completo) { setSubiendo(false); return alert("Ingresa el nombre del staff."); }
+        // El staff administrativo sí suele ir a la tabla de usuarios
+        const { error } = await supabase.from('usuarios').insert([{ nombre_completo: formPersonal.nombre_completo, rol: 'Administrador' }]);
+        if (error) throw error;
       }
 
-      const tablaDestino = tipoAlta === 'UN' ? 'catalogos_unidades' : 'usuarios';
-      const { error } = await supabase.from(tablaDestino).insert([payload]);
+      alert(`✓ Alta de ${tipoAlta} registrada exitosamente en el sistema.`);
+      setFormAlumno({ matricula: '', nombre_completo: '', celular: '', generacion: '', fecha_entrega_empresa: '' });
+      setFormPersonal({ nombre_completo: '', rol: 'Lider', unidad_negocio: '' });
+      setFormUN({ nombre_unidad: '' });
+      
+      extraerInformacionSupabase(); // Refrescar para que aparezca en los catálogos
 
-      if (!error) {
-        alert(`✓ Alta de ${tipoAlta} registrada exitosamente en el sistema.`);
-        setFormAlumno({ matricula: '', nombre_completo: '', celular: '', generacion: '', fecha_entrega_empresa: '' });
-        setFormPersonal({ nombre_completo: '', rol: 'Lider', unidad_negocio: '' });
-        setFormUN({ nombre_unidad: '' });
-        extraerInformacionSupabase(); 
-      } else {
-        alert("Error en inserción: " + error.message);
-      }
     } catch (err) {
-      alert("Error en el servidor: " + err.message);
+      alert("Error en la Base de Datos: " + err.message);
     } finally {
       setSubiendo(false);
     }
@@ -157,7 +179,6 @@ export default function AdminDashboard() {
         diasSinManejar = Math.max(0, Math.floor((new Date().getTime() - inicioOPT.getTime()) / (1000 * 60 * 60 * 24)));
       }
 
-      // MOTOR DE CERTIFICACIÓN (8 SEMANAS / 56 DÍAS)
       const fechaInicioReal = alumno.fecha_entrega_operacion || alumno.fecha_inicio_opt || alumno.created_at;
       const diasDesdeEntrega = fechaInicioReal ? Math.max(0, Math.floor((new Date().getTime() - new Date(fechaInicioReal).getTime()) / (1000 * 60 * 60 * 24))) : 0;
       let diasAtrasoCertificacion = 0;
@@ -176,14 +197,12 @@ export default function AdminDashboard() {
 
       if (alertaCriticaCertificacion) {
         alertasIA.unshift({
-          id: alumno.id,
-          tipo: 'certificacion',
-          texto: `🚨 URGENTE - CERTIFICACIÓN VENCIDA: ${alumno.nombre_completo} superó las 8 semanas. Tiene ${diasAtrasoCertificacion} días de atraso en su operación sin ser certificado.`
+          id: alumno.id, tipo: 'certificacion',
+          texto: `🚨 URGENTE - CERTIFICACIÓN VENCIDA: ${alumno.nombre_completo} superó las 8 semanas. Tiene ${diasAtrasoCertificacion} días de atraso en su operación.`
         });
       } else if (riesgoBaja >= 60) {
         alertasIA.push({
-          id: alumno.id,
-          tipo: 'riesgo',
+          id: alumno.id, tipo: 'riesgo',
           texto: `⚠️ Riesgo Crítico (${riesgoBaja}%): ${alumno.nombre_completo} acumula ${diasSinManejar} días sin registros y ${diasSinOPT} días sin OPT.`
         });
       }
@@ -199,12 +218,7 @@ export default function AdminDashboard() {
       comparativoGerentes[gerName].metaKm += 4000;
 
       return {
-        ...alumno,
-        kmReal: kmTotales,
-        hrsReal: (minsTotales / 60).toFixed(1),
-        diasSinOPT,
-        diasSinManejar,
-        riesgo: riesgoBaja
+        ...alumno, kmReal: kmTotales, hrsReal: (minsTotales / 60).toFixed(1), diasSinOPT, diasSinManejar, riesgo: riesgoBaja
       };
     });
 
@@ -240,7 +254,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '25px' }}>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '25px', flexWrap: 'wrap' }}>
         <button onClick={() => setPestañaActiva('general')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'general' ? '#0f172a' : '#fff', color: pestañaActiva === 'general' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}><BarChart3 size={16} style={{marginRight: '5px', inlineSize: 'auto'}}/> Vista General Directiva</button>
         <button onClick={() => setPestañaActiva('metas')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'metas' ? '#0f172a' : '#fff', color: pestañaActiva === 'metas' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>🏆 Avances vs Metas</button>
         <button onClick={() => setPestañaActiva('altas')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'altas' ? '#0f172a' : '#fff', color: pestañaActiva === 'altas' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}><UserPlus size={16}/> Configuración e Ingresos</button>
@@ -248,23 +262,26 @@ export default function AdminDashboard() {
         <button onClick={() => setPestañaActiva('biblioteca')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'biblioteca' ? '#0f172a' : '#fff', color: pestañaActiva === 'biblioteca' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}><Upload size={16}/> Biblioteca PPT</button>
       </div>
 
-      <div style={{ display: 'flex', gap: '15px', background: '#fff', padding: '15px', borderRadius: '12px', marginBottom: '25px', border: '1px solid #e2e8f0' }}>
-        <div style={{ flex: 1 }}>
+      <div style={{ display: 'flex', gap: '15px', background: '#fff', padding: '15px', borderRadius: '12px', marginBottom: '25px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 200px' }}>
           <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}><MapPin size={12}/> Unidad de Negocio:</label>
           <select value={filtroUN} onChange={e => setFiltroUN(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', marginTop: '4px', border: '1px solid #cbd5e1' }}>
-            <option value="ALL">Todas las Unidades</option><option value="Monterrey">Monterrey</option><option value="Nuevo Laredo">Nuevo Laredo</option>
+            <option value="ALL">Todas las Unidades</option>
+            {catUnidades.map((un, i) => <option key={i} value={un.nombre}>{un.nombre}</option>)}
           </select>
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: '1 1 200px' }}>
           <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}><Users size={12}/> Generación:</label>
           <select value={filtroGeneracion} onChange={e => setFiltroGeneracion(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', marginTop: '4px', border: '1px solid #cbd5e1' }}>
-            <option value="ALL">Todas</option><option value="Gen 24-A">Gen 24-A</option><option value="Gen 24-B">Gen 24-B</option>
+            <option value="ALL">Todas</option>
+            {generacionesUnicas.map((gen, i) => <option key={i} value={gen}>{gen}</option>)}
           </select>
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: '1 1 200px' }}>
           <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}><Target size={12}/> Gerente de Zona:</label>
           <select value={filtroGerente} onChange={e => setFiltroGerente(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', marginTop: '4px', border: '1px solid #cbd5e1' }}>
-            <option value="ALL">Todos los Gerentes</option><option value="Gerente Monterrey">Gerente Monterrey</option><option value="Gerente Laredo">Gerente Laredo</option>
+            <option value="ALL">Todos los Gerentes</option>
+            {catGerentes.map((ger, i) => <option key={i} value={ger.nombre}>{ger.nombre}</option>)}
           </select>
         </div>
       </div>
@@ -280,21 +297,16 @@ export default function AdminDashboard() {
               <p style={{fontSize: '14px', color: '#15803d'}}>✓ Indicadores óptimos: No hay riesgos latentes detectados hoy.</p>
             ) : analiticaProcesada.alertasIA.map((al, i) => (
               <div key={i} style={{ 
-                padding: '12px', 
-                background: al.tipo === 'certificacion' ? '#7f1d1d' : '#fff', 
-                borderLeft: `4px solid ${al.tipo === 'certificacion' ? '#f87171' : '#ef4444'}`, 
-                borderRadius: '6px', 
-                marginBottom: '8px', 
-                fontSize: '13px', 
-                color: al.tipo === 'certificacion' ? '#fecaca' : '#991b1b',
-                fontWeight: al.tipo === 'certificacion' ? 'bold' : 'normal'
+                padding: '12px', background: al.tipo === 'certificacion' ? '#7f1d1d' : '#fff', 
+                borderLeft: `4px solid ${al.tipo === 'certificacion' ? '#f87171' : '#ef4444'}`, borderRadius: '6px', marginBottom: '8px', 
+                fontSize: '13px', color: al.tipo === 'certificacion' ? '#fecaca' : '#991b1b', fontWeight: al.tipo === 'certificacion' ? 'bold' : 'normal'
               }}>
                 {al.texto}
               </div>
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px', marginBottom: '25px' }}>
             <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
               <h4 style={{ margin: '0 0 15px 0', fontSize: '14px' }}>🏢 Desempeño Acumulado por Unidad de Negocio</h4>
               <div style={{ width: '100%', height: '220px' }}>
@@ -369,7 +381,7 @@ export default function AdminDashboard() {
       )}
 
       {pestañaActiva === 'altas' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
           <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
             <h4 style={{ marginTop: 0, marginBottom: '15px' }}>Estructura de Ingresos</h4>
             {['Alumno', 'Lider', 'Gerente', 'Staff', 'UN'].map(tipo => (
@@ -419,19 +431,15 @@ export default function AdminDashboard() {
               {tipoAlta === 'UN' && (
                 <div style={{ marginBottom: '20px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nombre Comercial de la Unidad:</label>
-                  <input type="text" value={formUN.nombre_unidad} onChange={e => setFormUN({nombre_unidad: e.target.value})} placeholder="Ej. Hub Nuevo Laredo" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px' }} />
+                  <input type="text" value={formUN.nombre_unidad} onChange={e => setFormUN({nombre_unidad: e.target.value})} placeholder="Ej. Hub Nuevo Laredo" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px', boxSizing: 'border-box' }} />
                 </div>
               )}
 
               {(tipoAlta === 'Lider' || tipoAlta === 'Gerente' || tipoAlta === 'Staff') && (
                 <div>
-                  <div style={{ marginBottom: '15px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nombre Completo:</label>
-                    <input type="text" value={formPersonal.nombre_completo} onChange={e => setFormPersonal({...formPersonal, nombre_completo: e.target.value})} placeholder="Ej. Ing. Armando Casas" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px' }} />
-                  </div>
                   <div style={{ marginBottom: '20px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Unidad de Negocio Adscrito:</label>
-                    <input type="text" value={formPersonal.unidad_negocio} onChange={e => setFormPersonal({...formPersonal, unidad_negocio: e.target.value})} placeholder="Ej. Monterrey" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px' }} />
+                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nombre Completo:</label>
+                    <input type="text" value={formPersonal.nombre_completo} onChange={e => setFormPersonal({...formPersonal, nombre_completo: e.target.value})} placeholder="Ej. Ing. Armando Casas" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '5px', boxSizing: 'border-box' }} />
                   </div>
                 </div>
               )}
