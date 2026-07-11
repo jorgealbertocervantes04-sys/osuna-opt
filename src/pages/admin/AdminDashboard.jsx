@@ -51,7 +51,7 @@ export default function AdminDashboard() {
         supabase.from('registros_induccion').select('*'),
         supabase.from('cat_unidades').select('nombre'),
         supabase.from('cat_lideres').select('nombre'),
-        supabase.from('cat_gerentes').select('nombre')
+        supabase.from('cat_Gerentes').select('nombre')
       ]);
 
       if (!resU.error) setUsuarios(resU.data || []);
@@ -109,7 +109,7 @@ export default function AdminDashboard() {
 
       } else if (tipoAlta === 'Gerente') {
         if (!formPersonal.nombre_completo) { setSubiendo(false); return alert("Ingresa el nombre del gerente."); }
-        const { error } = await supabase.from('cat_gerentes').insert([{ nombre: formPersonal.nombre_completo }]);
+        const { error } = await supabase.from('cat_Gerentes').insert([{ nombre: formPersonal.nombre_completo }]);
         if (error) throw error;
 
       } else if (tipoAlta === 'Lider') {
