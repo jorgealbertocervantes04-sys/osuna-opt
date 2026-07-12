@@ -141,7 +141,7 @@ export default function DashboardGeneral() {
         supabase.from('registros_induccion').select('*'),
         supabase.from('cat_unidades').select('nombre'),
         supabase.from('cat_lideres').select('nombre'),
-        supabase.from('cat_gerentes').select('nombre') // Si te marca 404, revisa si en Supabase se llama "cat_Gerentes"
+        supabase.from('cat_Gerentes').select('nombre') // Si te marca 404, revisa si en Supabase se llama "cat_Gerentes"
       ]);
 
       setUsuarios(resU.data || []);
