@@ -12,7 +12,7 @@ import {
 import { supabase } from "../../services/supabaseClient";
 
 // ==========================================
-// COMPONENTES DE INTERFAZ (Estadísticas y Filtros)
+// COMPONENTES DE INTERFAZ Y BLINDAJE
 // ==========================================
 const FilterSelect = ({ icon: Icon, label, options, value, onChange }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '150px' }}>
@@ -31,12 +31,13 @@ const FilterSelect = ({ icon: Icon, label, options, value, onChange }) => (
 
 const Semaforo = ({ value, thresholds, inverse = false }) => {
   let status = 'ok';
+  const safeValue = Number(value) || 0;
   if (inverse) {
-    if (value >= thresholds.critical) status = 'critical';
-    else if (value >= thresholds.warning) status = 'warning';
+    if (safeValue >= thresholds.critical) status = 'critical';
+    else if (safeValue >= thresholds.warning) status = 'warning';
   } else {
-    if (value <= thresholds.critical) status = 'critical';
-    else if (value <= thresholds.warning) status = 'warning';
+    if (safeValue <= thresholds.critical) status = 'critical';
+    else if (safeValue <= thresholds.warning) status = 'warning';
   }
   const configs = {
     ok: { color: '#10b981', glow: 'rgba(16, 185, 129, 0.4)', text: 'Óptimo' },
@@ -68,12 +69,16 @@ const StatCard = ({ title, value, subtitle, icon: Icon, color, statusValue, thre
 );
 
 const ProgressBar = ({ current, target, label, color = "#3b82f6" }) => {
-  const percentage = target > 0 ? Math.min(Math.round((current / target) * 100), 100) : 0;
+  // Blindaje Anti-Crashes (Evita el error 'toLocaleString of undefined')
+  const safeCurrent = Number(current) || 0;
+  const safeTarget = Number(target) || 0;
+  const percentage = safeTarget > 0 ? Math.min(Math.round((safeCurrent / safeTarget) * 100), 100) : 0;
+  
   return (
     <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '4px', fontWeight: 600 }}>
         <span style={{ color: '#475569' }}>{label}</span>
-        <span style={{ color: color }}>{current.toLocaleString()} / {target.toLocaleString()} ({percentage}%)</span>
+        <span style={{ color: color }}>{safeCurrent.toLocaleString()} / {safeTarget.toLocaleString()} ({percentage}%)</span>
       </div>
       <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
         <div style={{ width: `${percentage}%`, height: '100%', backgroundColor: color, borderRadius: '4px', transition: 'width 0.5s ease-in-out' }} />
@@ -83,7 +88,7 @@ const ProgressBar = ({ current, target, label, color = "#3b82f6" }) => {
 };
 
 // ==========================================
-// VISTA PRINCIPAL: DASHBOARD DIRECTIVO COMPLETAMENTE INTEGRADO
+// VISTA PRINCIPAL: DASHBOARD DIRECTIVO
 // ==========================================
 export default function DashboardGeneral() {
   const navigate = useNavigate();
@@ -125,18 +130,18 @@ export default function DashboardGeneral() {
   const [urlMaterial, setUrlMaterial] = useState('');
   const [dirigidoA, setDirigidoA] = useState('Alumno');
 
-  // CARGA DE DATOS BLINDADA (Sin dataService, puro Supabase directo)
+  // CARGA DE DATOS BLINDADA
   const extraerInformacionSupabase = async () => {
     setCargando(true);
     try {
       const [resU, resV, resC, resI, resUn, resLid, resGer] = await Promise.all([
-        supabase.from('usuarios').select('id, rol, nombre_completo, numero_empleado, unidad_negocio, gerente, lider, tutor_opt, etapa_actual, estatus, generacion, created_at, fecha_entrega_operacion, fecha_inicio_opt'),
-        supabase.from('viajes_diarios').select('id_alumno, km_recorridos, tiempo_total_minutos, hora_inicio'),
-        supabase.from('encuestas').select('id_alumno, calificacion_general'),
+        supabase.from('usuarios').select('*'),
+        supabase.from('viajes_diarios').select('*'),
+        supabase.from('encuestas').select('*'),
         supabase.from('registros_induccion').select('*'),
         supabase.from('cat_unidades').select('nombre'),
         supabase.from('cat_lideres').select('nombre'),
-        supabase.from('cat_gerentes').select('nombre')
+        supabase.from('cat_gerentes').select('nombre') // Si te marca 404, revisa si en Supabase se llama "cat_Gerentes"
       ]);
 
       setUsuarios(resU.data || []);
@@ -144,6 +149,7 @@ export default function DashboardGeneral() {
       setEncuestas360(resC.data || []);
       setRegistrosInduccion(resI.data || []);
       
+      // El "?.map" nos blinda por si la tabla no existe (Error 404)
       setCatUnidades(resUn.data ? resUn.data.map(i => i.nombre) : []);
       setCatLideres(resLid.data ? resLid.data.map(i => i.nombre) : []);
       setCatGerentes(resGer.data ? resGer.data.map(i => i.nombre) : []);
@@ -169,11 +175,9 @@ export default function DashboardGeneral() {
 
   // MOTOR DINÁMICO DE FILTRADO Y CÁLCULOS
   const analiticaProcesada = useMemo(() => {
+    let alumnosProcesados = [];
     let alertasIA = [];
-    let comparativoUN = {};
-    let comparativoGerentes = {};
-    let comparativoLideres = {};
-
+    
     const soloAlumnos = usuarios.filter(u => u.rol === 'Alumno' && u.estatus !== 'Baja');
     
     // Fechas para el filtro
@@ -182,41 +186,44 @@ export default function DashboardGeneral() {
     const inicioSemana = new Date(hoy);
     inicioSemana.setDate(hoy.getDate() - hoy.getDay());
 
-    const alumnosModificados = soloAlumnos.map(alumno => {
-      // Filtro de Viajes por Fecha
-      const misViajes = viajes.filter(v => {
-        if (v.id_alumno !== alumno.id) return false;
+    soloAlumnos.forEach(a => {
+      // 1. Filtrar viajes estrictamente por el rango de fechas seleccionado
+      const misViajesFiltrados = viajes.filter(v => {
+        if (v.id_alumno !== a.id) return false;
         if (filtroFecha === 'Todo el Historial') return true;
+        
         if (!v.hora_inicio) return false;
         const fechaViaje = new Date(v.hora_inicio);
+        
         if (filtroFecha === 'Hoy') return fechaViaje.toDateString() === hoy.toDateString();
         if (filtroFecha === 'Esta Semana') return fechaViaje >= inicioSemana;
         if (filtroFecha === 'Este Mes') return fechaViaje >= inicioMes;
         return true;
       });
 
-      const misQuejas = encuestas360.filter(q => q.id_alumno === alumno.id && q.calificacion_general <= 2);
-      const kmTotales = misViajes.reduce((sum, v) => sum + (parseFloat(v.km_recorridos) || 0), 0);
-      const minsTotales = misViajes.reduce((sum, v) => sum + (parseFloat(v.tiempo_total_minutos) || 0), 0);
+      const kmAcumulados = misViajesFiltrados.reduce((sum, v) => sum + (parseFloat(v.km_recorridos) || 0), 0);
+      const minsAcumulados = misViajesFiltrados.reduce((sum, v) => sum + (parseFloat(v.tiempo_total_minutos) || 0), 0);
+      
+      const misQuejas = encuestas360.filter(q => q.id_alumno === a.id && q.calificacion_general <= 2);
 
       // Tiempos Muertos y Asignación
-      let diasSinOPT = !alumno.tutor_opt ? 5 : 0;
+      let diasSinOPT = !a.tutor_opt ? 5 : 0;
       let diasSinManejar = 0;
-      const todosSusViajes = viajes.filter(v => v.id_alumno === alumno.id); // Usamos todos para ver inactividad real
+      const todosSusViajes = viajes.filter(v => v.id_alumno === a.id); // Inactividad en base a todo su historial
       if (todosSusViajes.length > 0) {
         const ultimoViaje = Math.max(...todosSusViajes.map(v => new Date(v.hora_inicio || Date.now()).getTime()));
         diasSinManejar = Math.max(0, Math.floor((hoy.getTime() - ultimoViaje) / (1000 * 60 * 60 * 24)));
-      } else if (alumno.etapa_actual === 'OPT') {
+      } else if (a.etapa_actual === 'OPT') {
         diasSinManejar = 10;
       }
 
       // Certificación y Alertas
-      const fechaInicioReal = alumno.fecha_entrega_operacion || alumno.fecha_inicio_opt || alumno.created_at;
+      const fechaInicioReal = a.fecha_entrega_operacion || a.fecha_inicio_opt || a.created_at;
       const diasDesdeEntrega = fechaInicioReal ? Math.max(0, Math.floor((hoy.getTime() - new Date(fechaInicioReal).getTime()) / (1000 * 60 * 60 * 24))) : 0;
       let diasAtrasoCertificacion = 0;
       let alertaCritica = false;
 
-      if (diasDesdeEntrega >= 56 && alumno.etapa_actual !== 'Certificado') {
+      if (diasDesdeEntrega >= 56 && a.etapa_actual !== 'Certificado') {
         diasAtrasoCertificacion = diasDesdeEntrega - 56;
         alertaCritica = true;
       }
@@ -224,98 +231,108 @@ export default function DashboardGeneral() {
       let riesgoBaja = (diasSinManejar > 5 ? 40 : 0) + (diasSinOPT > 4 ? 30 : 0) + (misQuejas.length > 0 ? 30 : 0) + (alertaCritica ? 50 : 0);
 
       if (alertaCritica) {
-        alertasIA.unshift({ tipo: 'cert', texto: `🚨 URGENTE: ${alumno.nombre_completo} excedió las 8 semanas. Atraso de ${diasAtrasoCertificacion} días.` });
+        alertasIA.unshift({ tipo: 'cert', texto: `🚨 URGENTE: ${a.nombre_completo} excedió las 8 semanas límite. Atraso de ${diasAtrasoCertificacion} días.` });
       } else if (riesgoBaja >= 60) {
-        alertasIA.push({ tipo: 'riesgo', texto: `⚠️ Riesgo (${riesgoBaja}%): ${alumno.nombre_completo} lleva ${diasSinManejar} días inactivo.` });
+        alertasIA.push({ tipo: 'riesgo', texto: `⚠️ Riesgo Crítico (${riesgoBaja}%): ${a.nombre_completo} lleva ${diasSinManejar} días inactivo.` });
       }
 
-      return {
-        ...alumno,
-        kmReal: kmTotales,
-        hrsReal: parseFloat((minsTotales / 60).toFixed(1)),
+      alumnosProcesados.push({
+        id: a.id,
+        nombre: a.nombre_completo,
+        un: a.unidad_negocio || 'Sin Unidad',
+        generacion: a.generacion || 'Sin Generación',
+        lider: a.lider || 'Sin Líder',
+        gerente: a.gerente || 'Sin Gerente',
+        etapa: a.etapa_actual,
+        kmActual: kmAcumulados,
         kmMeta: 4000,
+        hrsActual: parseFloat((minsAcumulados / 60).toFixed(1)),
         hrsMeta: 100,
-        diasSinOPT,
-        diasSinManejar,
-        diasAtrasoCertificacion,
-        riesgo: riesgoBaja
-      };
+        diasAsignacion: diasSinOPT,
+        diasSinManejo: diasSinManejar,
+        diasAtrasoCertificacion: diasAtrasoCertificacion
+      });
     });
 
     // APLICAR FILTROS SUPERIORES
-    const listaFiltrada = alumnosModificados.filter(a => {
-      const unMatch = filtroUN === 'ALL' || a.unidad_negocio === filtroUN;
-      const genMatch = filtroGeneracion === 'ALL' || a.generacion === filtroGeneracion;
-      const gerMatch = filtroGerente === 'ALL' || a.gerente === filtroGerente;
-      const lidMatch = filtroLider === 'ALL' || a.lider === filtroLider;
-      return unMatch && genMatch && gerMatch && lidMatch;
+    const filtrados = alumnosProcesados.filter(a => {
+      const matchUN = filtroUN === 'ALL' || a.un === filtroUN;
+      const matchGen = filtroGeneracion === 'ALL' || a.generacion === filtroGeneracion;
+      const matchLider = filtroLider === 'ALL' || a.lider === filtroLider;
+      const matchGerente = filtroGerente === 'ALL' || a.gerente === filtroGerente;
+      return matchUN && matchGen && matchLider && matchGerente;
     });
 
-    // CONSTRUIR GRÁFICAS
-    listaFiltrada.forEach(a => {
-      const unName = a.unidad_negocio || "No Asignada";
-      if (!comparativoUN[unName]) comparativoUN[unName] = { name: unName, kmReal: 0, metaKm: 0 };
-      comparativoUN[unName].kmReal += a.kmReal; comparativoUN[unName].metaKm += 4000;
+    // CONSTRUIR GRÁFICAS DE FORMA SEGURA
+    let comparativoUN = {};
+    let comparativoGerentes = {};
+    let comparativoLideres = {};
 
-      const gerName = a.gerente || "Sin Gerente";
-      if (!comparativoGerentes[gerName]) comparativoGerentes[gerName] = { name: gerName, kmReal: 0, metaKm: 0 };
-      comparativoGerentes[gerName].kmReal += a.kmReal; comparativoGerentes[gerName].metaKm += 4000;
+    filtrados.forEach(a => {
+      if (!comparativoUN[a.un]) comparativoUN[a.un] = { name: a.un, kmReal: 0, metaKm: 0 };
+      comparativoUN[a.un].kmReal += a.kmActual; comparativoUN[a.un].metaKm += 4000;
 
-      const lidName = a.lider || "Sin Líder";
-      if (!comparativoLideres[lidName]) comparativoLideres[lidName] = { name: lidName, km: 0, horas: 0 };
-      comparativoLideres[lidName].km += a.kmReal; comparativoLideres[lidName].horas += a.hrsReal;
+      if (!comparativoGerentes[a.gerente]) comparativoGerentes[a.gerente] = { name: a.gerente, kmReal: 0, metaKm: 0 };
+      comparativoGerentes[a.gerente].kmReal += a.kmActual; comparativoGerentes[a.gerente].metaKm += 4000;
+
+      if (!comparativoLideres[a.lider]) comparativoLideres[a.lider] = { name: a.lider, km: 0, horas: 0 };
+      comparativoLideres[a.lider].km += a.kmActual; comparativoLideres[a.lider].horas += a.hrsActual;
     });
 
     return { 
-      listaFiltrada, alertasIA, 
+      datosFiltrados: filtrados, 
+      alertasIA, 
       chartUN: Object.values(comparativoUN), 
       chartGerentes: Object.values(comparativoGerentes),
       chartLideres: Object.values(comparativoLideres)
     };
   }, [usuarios, viajes, encuestas360, filtroUN, filtroGeneracion, filtroGerente, filtroLider, filtroFecha]);
 
+  // CALCULAR KPIs PARA LAS TARJETAS (BLINDADO CONTRA NaN)
   const kpis = useMemo(() => {
-    if (analiticaProcesada.listaFiltrada.length === 0) return { kmTotal: 0, hrsTotal: 0, promAsignacion: 0, promSinManejo: 0 };
-    const kmTotal = analiticaProcesada.listaFiltrada.reduce((acc, a) => acc + a.kmReal, 0);
-    const hrsTotal = analiticaProcesada.listaFiltrada.reduce((acc, a) => acc + a.hrsReal, 0);
-    const promAsignacion = analiticaProcesada.listaFiltrada.reduce((acc, a) => acc + a.diasSinOPT, 0) / analiticaProcesada.listaFiltrada.length;
-    const promSinManejo = analiticaProcesada.listaFiltrada.reduce((acc, a) => acc + a.diasSinManejar, 0) / analiticaProcesada.listaFiltrada.length;
-    return { kmTotal, hrsTotal, promAsignacion: promAsignacion.toFixed(1), promSinManejo: promSinManejo.toFixed(1) };
-  }, [analiticaProcesada.listaFiltrada]);
+    const data = analiticaProcesada.datosFiltrados;
+    if (!data || data.length === 0) return { kmTotal: 0, hrsTotal: 0, promAsignacion: 0, promSinManejo: 0 };
+    
+    const kmTotal = data.reduce((acc, a) => acc + (a.kmActual || 0), 0);
+    const hrsTotal = data.reduce((acc, a) => acc + (a.hrsActual || 0), 0);
+    const sumAsignacion = data.reduce((acc, a) => acc + (a.diasAsignacion || 0), 0);
+    const sumSinManejo = data.reduce((acc, a) => acc + (a.diasSinManejo || 0), 0);
+    
+    return { 
+      kmTotal, 
+      hrsTotal, 
+      promAsignacion: (sumAsignacion / data.length).toFixed(1), 
+      promSinManejo: (sumSinManejo / data.length).toFixed(1) 
+    };
+  }, [analiticaProcesada.datosFiltrados]);
 
   // FUNCIONES DE ALTAS Y MATERIALES
   const ejecutarAltaCorporativa = async (e) => {
     e.preventDefault();
     setSubiendo(true);
     try {
-      let payload = {};
       if (tipoAlta === 'Alumno') {
         if (!formAlumno.matricula || !formAlumno.nombre_completo || !formAlumno.celular || !formAlumno.generacion || !formAlumno.fecha_entrega_empresa) {
           setSubiendo(false); return alert("⚠️ Todos los campos del alumno son obligatorios.");
         }
-        payload = {
+        const payload = {
           numero_empleado: formAlumno.matricula, nombre_completo: formAlumno.nombre_completo, telefono: formAlumno.celular,
           generacion: formAlumno.generacion, fecha_entrega_operacion: new Date(formAlumno.fecha_entrega_empresa).toISOString(),
           rol: 'Alumno', etapa_actual: 'Prueba Intermedia', estatus: 'En proceso'
         };
-        const { error } = await supabase.from('usuarios').insert([payload]);
-        if (error) throw error;
+        await supabase.from('usuarios').insert([payload]);
       } else if (tipoAlta === 'UN') {
         if (!formUN.nombre_unidad) { setSubiendo(false); return alert("Ingresa el nombre."); }
-        const { error } = await supabase.from('cat_unidades').insert([{ nombre: formUN.nombre_unidad }]);
-        if (error) throw error;
+        await supabase.from('cat_unidades').insert([{ nombre: formUN.nombre_unidad }]);
       } else if (tipoAlta === 'Lider') {
         if (!formPersonal.nombre_completo) { setSubiendo(false); return alert("Ingresa el nombre."); }
-        const { error } = await supabase.from('cat_lideres').insert([{ nombre: formPersonal.nombre_completo }]);
-        if (error) throw error;
+        await supabase.from('cat_lideres').insert([{ nombre: formPersonal.nombre_completo }]);
       } else if (tipoAlta === 'Gerente') {
         if (!formPersonal.nombre_completo) { setSubiendo(false); return alert("Ingresa el nombre."); }
-        const { error } = await supabase.from('cat_gerentes').insert([{ nombre: formPersonal.nombre_completo }]);
-        if (error) throw error;
+        await supabase.from('cat_gerentes').insert([{ nombre: formPersonal.nombre_completo }]);
       } else if (tipoAlta === 'Staff') {
         if (!formPersonal.nombre_completo) { setSubiendo(false); return alert("Ingresa el nombre."); }
-        const { error } = await supabase.from('usuarios').insert([{ nombre_completo: formPersonal.nombre_completo, rol: 'Admin' }]);
-        if (error) throw error;
+        await supabase.from('usuarios').insert([{ nombre_completo: formPersonal.nombre_completo, rol: 'Admin' }]);
       }
 
       alert(`✓ Alta de ${tipoAlta} registrada exitosamente.`);
@@ -369,7 +386,7 @@ export default function DashboardGeneral() {
         </div>
       </header>
 
-      {/* MENÚ DE PESTAÑAS (INTACTO) */}
+      {/* MENÚ DE PESTAÑAS */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '25px', flexWrap: 'wrap' }}>
         <button onClick={() => setPestañaActiva('general')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'general' ? '#0f172a' : '#fff', color: pestañaActiva === 'general' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}><BarChart3 size={16} style={{marginRight: '5px', inlineSize: 'auto'}}/> Vista General Directiva</button>
         <button onClick={() => setPestañaActiva('metas')} style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', background: pestañaActiva === 'metas' ? '#0f172a' : '#fff', color: pestañaActiva === 'metas' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>🏆 Avances vs Metas</button>
@@ -458,7 +475,7 @@ export default function DashboardGeneral() {
         <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
           <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ fontSize: '1.125rem', color: '#0f172a', margin: 0, fontWeight: 800 }}>Avance de Metas por Alumno (Detalle)</h2>
-            <span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 600 }}>Mostrando {analiticaProcesada.listaFiltrada.length} alumnos</span>
+            <span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 600 }}>Mostrando {analiticaProcesada.datosFiltrados.length} alumnos</span>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '800px' }}>
@@ -472,10 +489,10 @@ export default function DashboardGeneral() {
                 </tr>
               </thead>
               <tbody>
-                {analiticaProcesada.listaFiltrada.length === 0 ? (
+                {analiticaProcesada.datosFiltrados.length === 0 ? (
                   <tr><td colSpan="5" style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>No hay datos para los filtros seleccionados</td></tr>
                 ) : (
-                  analiticaProcesada.listaFiltrada.map((a) => (
+                  analiticaProcesada.datosFiltrados.map((a) => (
                     <tr key={a.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                       <td style={{ padding: '16px 24px' }}>
                         <div style={{ fontWeight: 800, color: '#0f172a' }}>{a.nombre}</div>
