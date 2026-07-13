@@ -19,8 +19,9 @@ export default function Examenes() {
   const cargarDatos = async () => {
     setCargando(true);
     try {
+      // CORRECCIÓN 404: Apuntamos a la tabla "examenes" y no a "examenes_teoricos"
       const [resExas, resUsers] = await Promise.all([
-        supabase.from('examenes_teoricos').select('*'),
+        supabase.from('examenes').select('*'),
         supabase.from('usuarios').select('id, nombre_completo, generacion, rol, unidad_negocio, lider')
       ]);
 
@@ -85,7 +86,8 @@ export default function Examenes() {
         fecha_realizacion: new Date().toISOString() 
       };
 
-      const { error } = await supabase.from('examenes_teoricos').insert([payload]);
+      // CORRECCIÓN 404: Insertamos en la tabla "examenes"
+      const { error } = await supabase.from('examenes').insert([payload]);
       if (error) throw error;
 
       setModalAbierto(false); 
@@ -101,7 +103,8 @@ export default function Examenes() {
   const eliminarExamen = async (id) => {
     if (window.confirm("⚠️ ¿Deseas eliminar permanentemente esta calificación?")) {
       try {
-        const { error } = await supabase.from('examenes_teoricos').delete().eq('id', id);
+        // CORRECCIÓN 404: Borramos de la tabla "examenes"
+        const { error } = await supabase.from('examenes').delete().eq('id', id);
         if (error) throw error;
         cargarDatos();
       } catch (error) {

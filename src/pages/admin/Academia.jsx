@@ -22,10 +22,10 @@ export default function Academia() {
   const cargarDatos = async () => {
     setCargando(true);
     try {
-      // Peticiones directas a Supabase (reemplazando dataService)
+      // Peticiones directas a Supabase (CORREGIDO: Apuntando a la tabla 'examenes')
       const [resMats, resExas, resUsers] = await Promise.all([
         supabase.from('material_estudio').select('*'),
-        supabase.from('examenes_teoricos').select('*'),
+        supabase.from('examenes').select('*'), 
         supabase.from('usuarios').select('*')
       ]);
 
@@ -74,7 +74,7 @@ export default function Academia() {
       cargarDatos(); 
   }, [filtrosGlobales]);
 
-  // ACCIONES BASE DE DATOS (Conexión Directa a Supabase)
+  // ACCIONES BASE DE DATOS
   const guardarMaterial = async () => {
     if(!formMat.titulo || !formMat.semana_asignada) return alert("Título y Semana obligatorios.");
     setGuardando(true);
@@ -112,6 +112,7 @@ export default function Academia() {
     }
   };
 
+  // CORREGIDO: Apuntando a la tabla 'examenes' al guardar
   const guardarExamen = async () => {
     if(!formExa.id_alumno || !formExa.semana || !formExa.calificacion) return alert("Llena todos los campos.");
     setGuardando(true);
@@ -124,7 +125,7 @@ export default function Academia() {
             fecha_realizacion: new Date().toISOString() 
         };
 
-        const { error } = await supabase.from('examenes_teoricos').insert([payload]);
+        const { error } = await supabase.from('examenes').insert([payload]);
         if (error) throw error;
 
         setModalExamen(false); 
