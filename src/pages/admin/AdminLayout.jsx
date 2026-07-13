@@ -111,9 +111,15 @@ export default function AdminLayout() {
       
       {/* BARRA LATERAL (SIDEBAR) */}
       <div style={{ width: '290px', minWidth: '290px', backgroundColor: 'var(--sidebar-bg)', borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', padding: '25px 0', boxShadow: '4px 0 20px rgba(0,0,0,0.5)', zIndex: 10, overflowY: 'auto' }}>
-        <h2 style={{ textAlign: 'center', marginBottom: 0, fontSize: '28px', fontWeight: 800, letterSpacing: '1px', color: 'var(--text-light)' }}>UDAT</h2>
-        <p style={{ textAlign: 'center', color: 'var(--primary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: '20px', fontWeight: 600 }}>Centro de Mando</p>
-        
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '25px', padding: '0 20px' }}>
+  <div style={{ background: 'linear-gradient(135deg, var(--primary) 0%, #0EA5E9 100%)', width: '48px', height: '48px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px', boxShadow: '0 4px 15px var(--primary-glow)' }}>
+    <span style={{ fontSize: '24px', color: 'white' }}>🚚</span>
+  </div>
+  <h2 style={{ margin: 0, fontSize: '26px', fontWeight: 900, letterSpacing: '0.5px', color: 'var(--text-light)' }}>UDAT</h2>
+  <div style={{ background: 'rgba(37, 99, 235, 0.15)', padding: '4px 12px', borderRadius: '20px', marginTop: '8px', border: '1px solid rgba(37, 99, 235, 0.3)' }}>
+    <span style={{ color: 'var(--primary)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '2px', fontWeight: 800 }}>Control Tower</span>
+  </div>
+</div>
         {/* FILTROS GLOBALES DINÁMICOS */}
         <div style={{ backgroundColor: 'rgba(0,0,0,0.15)', padding: '18px 20px', marginBottom: '15px', borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
