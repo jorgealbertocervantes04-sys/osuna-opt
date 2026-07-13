@@ -87,3 +87,38 @@ button {
 button:hover {
   transform: translateY(-1px);
 }
+/* =========================================
+   EFECTOS PREMIUM Y DETALLES DE ALTA GAMA
+   ========================================= */
+
+/* 1. Color de selección de texto (Cuando sombreas texto con el mouse) */
+::selection {
+  background-color: var(--primary);
+  color: #ffffff;
+}
+
+/* 2. Efecto radar en las tablas: Ilumina la fila al pasar el mouse */
+tbody tr:hover {
+  background-color: rgba(37, 99, 235, 0.08) !important; /* Un azul muy sutil */
+  box-shadow: inset 4px 0 0 var(--info) !important; /* Línea indicadora a la izquierda */
+  cursor: default;
+}
+
+/* 3. Brillo neón en los formularios (Cuando el usuario da clic para escribir) */
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  border-color: var(--info) !important;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.25) !important;
+  transition: all 0.3s ease;
+  background-color: rgba(0,0,0,0.4) !important;
+}
+
+/* 4. Suavizado en los bordes de los inputs para quitar estilos viejos del navegador */
+input, select, textarea {
+  transition: all 0.2s ease-in-out;
+}
+
+/* 5. Efecto de pulsación en botones al hacer clic */
+button:active {
+  transform: scale(0.97) !important;
+}
