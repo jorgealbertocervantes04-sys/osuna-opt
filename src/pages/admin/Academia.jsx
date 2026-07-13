@@ -21,63 +21,120 @@ export default function Academia() {
 
   const cargarDatos = async () => {
     setCargando(true);
-    const [mats, exas, users] = await Promise.all([
-      dataService.dataService.obtenerMaterialEstudio(),
-      dataService.dataService.obtenerExamenes(),
-      dataService.dataService.obtenerUsuarios()
-    ]);
+    try {
+      // Peticiones directas a Supabase (reemplazando dataService)
+      const [resMats, resExas, resUsers] = await Promise.all([
+        supabase.from('material_estudio').select('*'),
+        supabase.from('examenes_teoricos').select('*'),
+        supabase.from('usuarios').select('*')
+      ]);
 
-    setMateriales(mats);
-    setAlumnosDisponibles(users.filter(u => u.rol === 'Alumno'));
+      if (resMats.error) throw resMats.error;
+      if (resExas.error) throw resExas.error;
+      if (resUsers.error) throw resUsers.error;
 
-    // Cruzar exámenes con el nombre del alumno
-    const exasConAlumno = exas.map(e => ({
-      ...e,
-      alumno: users.find(u => u.id === e.id_alumno) || { nombre_completo: 'Usuario Borrado', generacion: '-' }
-    }));
+      const mats = resMats.data || [];
+      const exas = resExas.data || [];
+      const users = resUsers.data || [];
 
-    // Aplicar filtros globales solo a los exámenes
-    const fi = filtrosGlobales.desde ? new Date(filtrosGlobales.desde + 'T00:00:00') : new Date('2000-01-01');
-    const ff = filtrosGlobales.hasta ? new Date(filtrosGlobales.hasta + 'T23:59:59') : new Date('2100-01-01');
+      setMateriales(mats);
+      setAlumnosDisponibles(users.filter(u => u.rol === 'Alumno'));
 
-    const exasFiltrados = exasConAlumno.filter(e => {
-       const dateEx = e.fecha_realizacion ? new Date(e.fecha_realizacion) : new Date();
-       const pasaFecha = dateEx >= fi && dateEx <= ff;
-       const pasaGen = filtrosGlobales.generacion === 'TODOS' || e.alumno.generacion === filtrosGlobales.generacion;
-       return pasaFecha && pasaGen;
-    });
+      // Cruzar exámenes con el nombre del alumno
+      const exasConAlumno = exas.map(e => ({
+        ...e,
+        alumno: users.find(u => u.id === e.id_alumno) || { nombre_completo: 'Usuario Borrado', generacion: '-' }
+      }));
 
-    setExamenes(exasFiltrados);
-    setCargando(false);
+      // Aplicar filtros globales solo a los exámenes (si filtrosGlobales está disponible)
+      if (filtrosGlobales) {
+          const fi = filtrosGlobales.desde ? new Date(filtrosGlobales.desde + 'T00:00:00') : new Date('2000-01-01');
+          const ff = filtrosGlobales.hasta ? new Date(filtrosGlobales.hasta + 'T23:59:59') : new Date('2100-01-01');
+
+          const exasFiltrados = exasConAlumno.filter(e => {
+            const dateEx = e.fecha_realizacion ? new Date(e.fecha_realizacion) : new Date();
+            const pasaFecha = dateEx >= fi && dateEx <= ff;
+            const pasaGen = filtrosGlobales.generacion === 'TODOS' || e.alumno.generacion === filtrosGlobales.generacion;
+            return pasaFecha && pasaGen;
+          });
+          setExamenes(exasFiltrados);
+      } else {
+          setExamenes(exasConAlumno);
+      }
+
+    } catch (error) {
+      console.error("Error al cargar datos de Academia:", error);
+      alert("Error al cargar la Academia: " + error.message);
+    } finally {
+      setCargando(false);
+    }
   };
 
-  useEffect(() => { cargarDatos(); }, [filtrosGlobales]);
+  useEffect(() => { 
+      cargarDatos(); 
+  }, [filtrosGlobales]);
 
-  // ACCIONES BASE DE DATOS
+  // ACCIONES BASE DE DATOS (Conexión Directa a Supabase)
   const guardarMaterial = async () => {
     if(!formMat.titulo || !formMat.semana_asignada) return alert("Título y Semana obligatorios.");
     setGuardando(true);
-    const { exito, error } = await dataService.dataService.guardarMaterial(formMat);
-    if(exito) { setModalMaterial(false); setFormMat({ semana_asignada:'', titulo:'', descripcion:'', url_documento_video:'' }); cargarDatos(); }
-    else alert(error.message);
-    setGuardando(false);
+    
+    try {
+        const payload = {
+            titulo: formMat.titulo,
+            semana_asignada: parseInt(formMat.semana_asignada),
+            descripcion: formMat.descripcion,
+            url_documento_video: formMat.url_documento_video
+        };
+        
+        const { error } = await supabase.from('material_estudio').insert([payload]);
+        if (error) throw error;
+        
+        setModalMaterial(false); 
+        setFormMat({ semana_asignada:'', titulo:'', descripcion:'', url_documento_video:'' }); 
+        cargarDatos();
+    } catch (error) {
+        alert("Error al guardar material: " + error.message);
+    } finally {
+        setGuardando(false);
+    }
   };
 
   const borrarMaterial = async (id) => {
-    if(window.confirm("¿Borrar material?")) {
-      await dataService.dataService.eliminarMaterial(id);
-      cargarDatos();
+    if(window.confirm("⚠️ ¿Estás seguro de borrar este material de estudio?")) {
+        try {
+            const { error } = await supabase.from('material_estudio').delete().eq('id', id);
+            if (error) throw error;
+            cargarDatos();
+        } catch (error) {
+            alert("Error al eliminar material: " + error.message);
+        }
     }
   };
 
   const guardarExamen = async () => {
     if(!formExa.id_alumno || !formExa.semana || !formExa.calificacion) return alert("Llena todos los campos.");
     setGuardando(true);
-    const payload = { ...formExa, fecha_realizacion: new Date().toISOString() };
-    const { exito, error } = await dataService.dataService.guardarExamen(payload);
-    if(exito) { setModalExamen(false); setFormExa({ id_alumno:'', semana:'', calificacion:'' }); cargarDatos(); }
-    else alert(error.message);
-    setGuardando(false);
+    
+    try {
+        const payload = { 
+            id_alumno: formExa.id_alumno,
+            semana: parseInt(formExa.semana),
+            calificacion: parseFloat(formExa.calificacion),
+            fecha_realizacion: new Date().toISOString() 
+        };
+
+        const { error } = await supabase.from('examenes_teoricos').insert([payload]);
+        if (error) throw error;
+
+        setModalExamen(false); 
+        setFormExa({ id_alumno:'', semana:'', calificacion:'' }); 
+        cargarDatos();
+    } catch (error) {
+        alert("Error al guardar examen: " + error.message);
+    } finally {
+        setGuardando(false);
+    }
   };
 
   const inputStyle = { width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '8px', boxSizing: 'border-box', fontSize: '14px', color: 'var(--text-light)', marginBottom: '15px' };
@@ -105,14 +162,14 @@ export default function Academia() {
             </tr>
           </thead>
           <tbody>
-            {cargando ? <tr><td colSpan="5" style={{padding:'20px', textAlign:'center'}}>Cargando...</td></tr>
-            : materiales.length === 0 ? <tr><td colSpan="5" style={{padding:'20px', textAlign:'center'}}>No hay material.</td></tr> 
+            {cargando ? <tr><td colSpan="5" style={{padding:'20px', textAlign:'center', color: 'var(--text-muted)'}}>Sincronizando academia...</td></tr>
+            : materiales.length === 0 ? <tr><td colSpan="5" style={{padding:'20px', textAlign:'center', color: 'var(--text-muted)'}}>No hay material publicado.</td></tr> 
             : materiales.map(m => (
               <tr key={m.id}>
                 <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}><b style={{ color: 'var(--primary)' }}>Sem. {m.semana_asignada}</b></td>
                 <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}><strong style={{ color: 'var(--text-light)' }}>{m.titulo}</strong></td>
                 <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}>{m.descripcion || '-'}</td>
-                <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}>{m.url_documento_video ? <a href={m.url_documento_video} target="_blank" rel="noreferrer" style={{color:'var(--info)'}}>🔗 Abrir Enlace</a> : 'Sin adjunto'}</td>
+                <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}>{m.url_documento_video ? <a href={m.url_documento_video} target="_blank" rel="noreferrer" style={{color:'var(--info)'}}>🔗 Abrir Enlace</a> : <span style={{color: 'var(--text-muted)'}}>Sin adjunto</span>}</td>
                 <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}><button onClick={() => borrarMaterial(m.id)} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--border-color)', color: '#f43f5e', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>🗑️ Borrar</button></td>
               </tr>
             ))}
@@ -139,8 +196,8 @@ export default function Academia() {
             </tr>
           </thead>
           <tbody>
-            {cargando ? <tr><td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando...</td></tr>
-            : examenes.length === 0 ? <tr><td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>Sin evaluaciones.</td></tr>
+            {cargando ? <tr><td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando evaluaciones...</td></tr>
+            : examenes.length === 0 ? <tr><td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>Sin evaluaciones registradas.</td></tr>
             : examenes.map(ex => {
               const c = parseFloat(ex.calificacion);
               const col = c >= 80 ? '#34d399' : c >= 60 ? '#fbbf24' : '#fb7185';

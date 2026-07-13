@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { dataService } from '../../services/dataService'; // Tu servicio profesional
 import { supabase } from "../../services/supabaseClient";
+
 export default function Directorio() {
   // 1. ATRAPAMOS LOS FILTROS GLOBALES DEL MENÚ IZQUIERDO
   const { filtrosGlobales } = useOutletContext();
@@ -27,12 +27,22 @@ export default function Directorio() {
     fecha_entrega_operacion: '' 
   });
 
-  // CARGAR DATOS REALES AL INICIAR LA PANTALLA
+  // CARGAR DATOS REALES AL INICIAR LA PANTALLA (Conexión Directa a Supabase)
   const cargarUsuarios = async () => {
     setCargando(true);
-    const data = await dataService.obtenerUsuarios();
-    setUsuarios(data || []);
-    setCargando(false);
+    try {
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select('*');
+      
+      if (error) throw error;
+      setUsuarios(data || []);
+    } catch (err) {
+      console.error("Error al cargar el directorio:", err);
+      alert("Error al cargar el directorio: " + err.message);
+    } finally {
+      setCargando(false);
+    }
   };
 
   useEffect(() => {
@@ -41,6 +51,9 @@ export default function Directorio() {
 
   // LÓGICA DE FILTRADO INTELIGENTE (Combina menú izquierdo con pantalla central)
   const usuariosFiltrados = usuarios.filter(u => {
+    // Si filtrosGlobales aún no carga, pasamos todo
+    if (!filtrosGlobales) return true;
+
     // A. Filtros Globales (Menú Izquierdo)
     let pasaGlobalGen = filtrosGlobales.generacion === 'TODOS' || u.generacion === filtrosGlobales.generacion;
     let pasaGlobalUni = filtrosGlobales.unidad === 'TODOS' || u.unidad_negocio === filtrosGlobales.unidad;
@@ -48,7 +61,7 @@ export default function Directorio() {
     let pasaGlobalGer = filtrosGlobales.gerente === 'TODOS' || u.gerente === filtrosGlobales.gerente;
     
     // Rango de fechas (usando fecha_registro si existe, o omitiendo si no)
-    let d = u.fecha_registro ? new Date(u.fecha_registro) : new Date();
+    let d = u.created_at ? new Date(u.created_at) : (u.fecha_registro ? new Date(u.fecha_registro) : new Date());
     const fi = filtrosGlobales.desde ? new Date(filtrosGlobales.desde + 'T00:00:00') : new Date('2000-01-01');
     const ff = filtrosGlobales.hasta ? new Date(filtrosGlobales.hasta + 'T23:59:59') : new Date('2100-01-01');
     let pasaFecha = d >= fi && d <= ff;
@@ -91,36 +104,55 @@ export default function Directorio() {
       empresa: usuario.empresa || '', unidad_negocio: usuario.unidad_negocio || '',
       lider: usuario.lider || '', gerente: usuario.gerente || '', 
       opt_asignado: usuario.opt_asignado || '', certificacion_opt: usuario.certificacion_opt || 'No Aplica',
-      fecha_entrega_operacion: usuario.fecha_entrega_operacion || '' // Carga de fecha desde DB
+      fecha_entrega_operacion: usuario.fecha_entrega_operacion ? usuario.fecha_entrega_operacion.split('T')[0] : '' // Carga de fecha desde DB limpia
     });
     setModalAbierto(true);
   };
 
+  // GUARDAR EXPEDIENTE DIRECTO EN SUPABASE
   const guardarExpediente = async () => {
     if (!formData.nombre_completo || !formData.telefono) {
       return alert("El nombre y el celular son obligatorios.");
     }
     
     let datosAGuardar = { ...formData };
-    if (!idEditando) {
-      datosAGuardar.contrasena = formData.nombre_completo.substring(0,3).toUpperCase().replace(/ /g,'X') + (formData.numero_empleado || '123');
+    
+    // Si la fecha está vacía, manda null para evitar errores de tipo en la BD
+    if (datosAGuardar.fecha_entrega_operacion === '') {
+        datosAGuardar.fecha_entrega_operacion = null;
     }
 
-    const { exito, error } = await dataService.guardarUsuario(datosAGuardar, idEditando);
-    
-    if (exito) {
-      setModalAbierto(false);
-      cargarUsuarios(); // Recargar la tabla con el nuevo dato
-    } else {
-      alert("Error al guardar: " + error.message);
+    try {
+        if (!idEditando) {
+            // Nuevo Registro
+            datosAGuardar.contrasena = formData.nombre_completo.substring(0,3).toUpperCase().replace(/ /g,'X') + (formData.numero_empleado || '123');
+            const { error } = await supabase.from('usuarios').insert([datosAGuardar]);
+            if (error) throw error;
+        } else {
+            // Actualizar Registro
+            const { error } = await supabase.from('usuarios').update(datosAGuardar).eq('id', idEditando);
+            if (error) throw error;
+        }
+
+        setModalAbierto(false);
+        cargarUsuarios(); // Recargar la tabla con el nuevo dato
+    } catch (err) {
+        console.error("Error al guardar:", err);
+        alert("Error al guardar: " + err.message);
     }
   };
 
+  // ELIMINAR DIRECTO EN SUPABASE
   const eliminarRegistro = async (id) => {
     if (window.confirm("⚠️ ATENCIÓN: ¿Deseas eliminar permanentemente a este usuario?")) {
-      const { exito, error } = await dataService.eliminarUsuario(id);
-      if (exito) cargarUsuarios();
-      else alert("Error al eliminar: " + error.message);
+        try {
+            const { error } = await supabase.from('usuarios').delete().eq('id', id);
+            if (error) throw error;
+            cargarUsuarios();
+        } catch (err) {
+            console.error("Error al eliminar:", err);
+            alert("Error al eliminar: " + err.message);
+        }
     }
   };
 
@@ -230,7 +262,7 @@ export default function Directorio() {
                       {u.rol === 'Alumno' && u.fecha_entrega_operacion && (
                         <>
                           <br/>
-                          <span style={{ color: 'var(--text-muted)' }}>Banderazo OPT:</span> <b style={{ color: 'var(--success)' }}>{u.fecha_entrega_operacion}</b>
+                          <span style={{ color: 'var(--text-muted)' }}>Banderazo OPT:</span> <b style={{ color: 'var(--success)' }}>{u.fecha_entrega_operacion.split('T')[0]}</b>
                         </>
                       )}
                     </td>

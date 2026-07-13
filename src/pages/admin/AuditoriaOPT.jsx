@@ -1,33 +1,43 @@
 import { useState, useEffect } from 'react';
 import { supabase } from "../../services/supabaseClient";
-import { dataService } from '../../services/dataService';
 
 export default function AuditoriaOPT() {
   const [tutores, setTutores] = useState([]);
-  const [evaluaciones, setEvaluaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
 
   const cargarDatos = async () => {
     setCargando(true);
-    const [datosUsuarios, datosEval] = await Promise.all([
-      supabase.from('usuarios').select('*'),
-      supabase.from('evaluaciones').select('*')
-    ]);
+    try {
+      const [resUsuarios, resEval] = await Promise.all([
+        supabase.from('usuarios').select('*'),
+        supabase.from('evaluaciones_cardex').select('*') // Apuntamos a la tabla correcta
+      ]);
 
-    // Filtrar solo tutores y calcular sus métricas
-    const listaTutores = datosUsuarios.filter(u => u.rol === 'Tutor');
-    
-    const tutoresConMetricas = listaTutores.map(t => {
-      const evalsTutor = datosEval.filter(e => e.id_tutor === t.id);
-      const alumnosUnicos = new Set(evalsTutor.map(e => e.id_alumno));
-      const sumaPromedios = evalsTutor.reduce((acc, e) => acc + (parseFloat(e.promedio_final) || 0), 0);
-      const promedioFinal = evalsTutor.length > 0 ? (sumaPromedios / evalsTutor.length).toFixed(1) : '0.0';
+      if (resUsuarios.error) throw resUsuarios.error;
+      if (resEval.error) throw resEval.error;
+
+      const datosUsuarios = resUsuarios.data || [];
+      const datosEval = resEval.data || [];
+
+      // Filtrar solo tutores y calcular sus métricas
+      const listaTutores = datosUsuarios.filter(u => u.rol === 'Tutor');
       
-      return { ...t, evals: evalsTutor.length, alumnos: alumnosUnicos.size, promedio: promedioFinal };
-    });
+      const tutoresConMetricas = listaTutores.map(t => {
+        const evalsTutor = datosEval.filter(e => e.id_tutor === t.id);
+        const alumnosUnicos = new Set(evalsTutor.map(e => e.id_alumno));
+        const sumaPromedios = evalsTutor.reduce((acc, e) => acc + (parseFloat(e.promedio_final) || 0), 0);
+        const promedioFinal = evalsTutor.length > 0 ? (sumaPromedios / evalsTutor.length).toFixed(1) : '0.0';
+        
+        return { ...t, evals: evalsTutor.length, alumnos: alumnosUnicos.size, promedio: promedioFinal };
+      });
 
-    setTutores(tutoresConMetricas);
-    setCargando(false);
+      setTutores(tutoresConMetricas);
+    } catch (error) {
+      console.error("Error al cargar la auditoría:", error);
+      alert("Error al cargar datos: " + error.message);
+    } finally {
+      setCargando(false);
+    }
   };
 
   useEffect(() => {
@@ -56,6 +66,8 @@ export default function AuditoriaOPT() {
           <tbody>
             {cargando ? (
               <tr><td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>Cargando datos...</td></tr>
+            ) : tutores.length === 0 ? (
+              <tr><td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>No se encontraron tutores registrados.</td></tr>
             ) : tutores.map(t => (
               <tr key={t.id}>
                 <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}><strong>{t.nombre_completo}</strong></td>

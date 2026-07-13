@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { dataService } from '../../services/dataService';
 import { supabase } from "../../services/supabaseClient";
+
 export default function Viajes() {
   const [viajes, setViajes] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -12,23 +12,34 @@ export default function Viajes() {
     nombre_opt: '', km_iniciales: '', km_finales: '', km_recorridos: '', tiempo_total_minutos: '', notas_novedad: ''
   });
 
-  // 1. Cargar datos reales desde Supabase
+  // 1. Cargar datos reales desde Supabase DIRECTO
   const cargarViajes = async () => {
     setCargando(true);
-    // Traemos los viajes y también a los usuarios para poder mostrar el nombre del alumno
-    const [datosViajes, datosUsuarios] = await Promise.all([
-      dataService.obtenerViajes(),
-      dataService.obtenerUsuarios()
-    ]);
+    try {
+      // Traemos viajes y usuarios al mismo tiempo (como lo tenías, pero directo con Supabase)
+      const [resViajes, resUsuarios] = await Promise.all([
+        supabase.from('viajes_diarios').select('*'),
+        supabase.from('usuarios').select('id, nombre_completo')
+      ]);
 
-    // Cruzamos la información: A cada viaje le inyectamos los datos de su alumno correspondiente
-    const viajesConAlumnos = datosViajes.map(viaje => {
-      const alumno = datosUsuarios.find(u => u.id === viaje.id_alumno);
-      return { ...viaje, alumno: alumno || { nombre_completo: 'Usuario Eliminado' } };
-    });
+      if (resViajes.error) throw resViajes.error;
+      
+      const datosViajes = resViajes.data || [];
+      const datosUsuarios = resUsuarios.data || [];
 
-    setViajes(viajesConAlumnos);
-    setCargando(false);
+      // Cruzamos la información
+      const viajesConAlumnos = datosViajes.map(viaje => {
+        const alumno = datosUsuarios.find(u => u.id === viaje.id_alumno);
+        return { ...viaje, alumno: alumno || { nombre_completo: 'Usuario Eliminado' } };
+      });
+
+      setViajes(viajesConAlumnos);
+    } catch (error) {
+      console.error("Error al cargar viajes:", error);
+      alert("Error al cargar los viajes: " + error.message);
+    } finally {
+      setCargando(false);
+    }
   };
 
   useEffect(() => {
@@ -64,13 +75,19 @@ export default function Viajes() {
       notas_novedad: formData.notas_novedad
     };
 
-    const { exito, error } = await dataService.guardarViaje(payload, idEditando);
-    
-    if (exito) {
+    try {
+      // Inyección directa a Supabase (Reemplaza a dataService.guardarViaje)
+      const { error } = await supabase
+        .from('viajes_diarios')
+        .update(payload)
+        .eq('id', idEditando);
+
+      if (error) throw error;
+
       alert("✓ Viaje actualizado correctamente.");
       setModalAbierto(false);
       cargarViajes();
-    } else {
+    } catch (error) {
       alert("Error al actualizar: " + error.message);
     }
   };
@@ -78,16 +95,23 @@ export default function Viajes() {
   // 3. Función para Eliminar
   const eliminarRegistro = async (id) => {
     if (window.confirm("⚠️ ¿Estás seguro de eliminar este registro de viaje de forma permanente?")) {
-      const { exito, error } = await dataService.eliminarViaje(id);
-      if (exito) {
+      try {
+        // Borrado directo en Supabase (Reemplaza a dataService.eliminarViaje)
+        const { error } = await supabase
+          .from('viajes_diarios')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+        
         cargarViajes();
-      } else {
+      } catch (error) {
         alert("Error al eliminar: " + error.message);
       }
     }
   };
 
-  // Estilos
+  // Estilos (Intactos)
   const inputStyle = { width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '8px', boxSizing: 'border-box', fontSize: '14px', color: 'var(--text-light)', marginBottom: '15px' };
   const labelStyle = { display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '1px' };
 
@@ -138,7 +162,7 @@ export default function Viajes() {
                 return (
                   <tr key={v.id} style={{ transition: '0.2s' }}>
                     <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}>{fechaFormat}</td>
-                    <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}><strong style={{ color: 'var(--text-light)' }}>{v.alumno.nombre_completo}</strong></td>
+                    <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}><strong style={{ color: 'var(--text-light)' }}>{v.alumno?.nombre_completo}</strong></td>
                     <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}>
                       {tutorTxt}<br/>
                       {evalPromedio ? <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 'bold' }}>⭐ {evalPromedio}/5</span> : <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Sin evaluar</span>}

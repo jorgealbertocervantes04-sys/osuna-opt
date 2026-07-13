@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { dataService } from '../../services/dataService';
 import { solicitarAnalisisDeRiesgo } from '../../services/aiService'; // Integración de la IA
 import { supabase } from "../../services/supabaseClient";
+
 export default function Cardex() {
   const [evaluaciones, setEvaluaciones] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -19,26 +19,38 @@ export default function Cardex() {
   const [cargandoIA, setCargandoIA] = useState(false);
   const [nivelRiesgo, setNivelRiesgo] = useState('');
 
-  // 1. Cargar datos reales desde Supabase
+  // 1. Cargar datos reales desde Supabase DIRECTO
   const cargarDatos = async () => {
     setCargando(true);
-    // Traemos evaluaciones y usuarios en paralelo
-    const [datosEval, datosUsuarios] = await Promise.all([
-      dataService.obtenerEvaluaciones(),
-      dataService.obtenerUsuarios()
-    ]);
+    try {
+      // Traemos evaluaciones y usuarios en paralelo desde Supabase
+      const [resEval, resUsuarios] = await Promise.all([
+        supabase.from('evaluaciones_cardex').select('*'),
+        supabase.from('usuarios').select('id, nombre_completo, rol, estatus, generacion')
+      ]);
 
-    setUsuarios(datosUsuarios);
+      if (resEval.error) throw resEval.error;
+      if (resUsuarios.error) throw resUsuarios.error;
 
-    // Cruzar la información: Inyectar nombres de alumno y tutor a cada evaluación
-    const evalsConNombres = datosEval.map(ev => {
-      const alumno = datosUsuarios.find(u => u.id === ev.id_alumno) || { nombre_completo: 'Usuario Eliminado' };
-      const tutor = datosUsuarios.find(u => u.id === ev.id_tutor) || { nombre_completo: 'Sin Asignar' };
-      return { ...ev, alumno, tutor };
-    });
+      const datosEval = resEval.data || [];
+      const datosUsuarios = resUsuarios.data || [];
 
-    setEvaluaciones(evalsConNombres);
-    setCargando(false);
+      setUsuarios(datosUsuarios);
+
+      // Cruzar la información: Inyectar nombres de alumno y tutor a cada evaluación
+      const evalsConNombres = datosEval.map(ev => {
+        const alumno = datosUsuarios.find(u => u.id === ev.id_alumno) || { nombre_completo: 'Usuario Eliminado' };
+        const tutor = datosUsuarios.find(u => u.id === ev.id_tutor) || { nombre_completo: 'Sin Asignar' };
+        return { ...ev, alumno, tutor };
+      });
+
+      setEvaluaciones(evalsConNombres);
+    } catch (error) {
+      console.error("Error al cargar el Cardex:", error);
+      alert("Error al cargar el Cardex: " + error.message);
+    } finally {
+      setCargando(false);
+    }
   };
 
   useEffect(() => {
@@ -92,24 +104,32 @@ export default function Cardex() {
       fecha_evaluacion: new Date().toISOString()
     };
 
-    const { exito, error } = await dataService.guardarEvaluacion(payload);
+    try {
+      // Guardar directo en Supabase
+      const { error } = await supabase.from('evaluaciones_cardex').insert([payload]);
+      
+      if (error) throw error;
 
-    if (exito) {
       alert("✓ ¡Evaluación guardada con éxito! Las gráficas se han actualizado.");
       setModalAbierto(false);
       cargarDatos();
-    } else {
-      alert("Error DB: " + error.message);
+    } catch (error) {
+      alert("Error al guardar en BD: " + error.message);
+    } finally {
+      setGuardando(false);
     }
-    setGuardando(false);
   };
 
   const eliminarRegistro = async (id) => {
     if (window.confirm("⚠️ ¿Deseas eliminar permanentemente esta evaluación del historial?")) {
-      const { exito, error } = await dataService.eliminarEvaluacion(id);
-      if (exito) {
+      try {
+        // Eliminar directo de Supabase
+        const { error } = await supabase.from('evaluaciones_cardex').delete().eq('id', id);
+        
+        if (error) throw error;
+        
         cargarDatos();
-      } else {
+      } catch (error) {
         alert("Error al eliminar: " + error.message);
       }
     }
@@ -172,13 +192,15 @@ export default function Cardex() {
                 const bgSemaforo = e.semaforo === 'Verde' ? 'rgba(16, 185, 129, 0.2)' : e.semaforo === 'Amarillo' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(244, 63, 94, 0.2)';
                 const colorSemaforo = e.semaforo === 'Verde' ? '#34d399' : e.semaforo === 'Amarillo' ? '#fbbf24' : '#fb7185';
                 const borderSemaforo = e.semaforo === 'Verde' ? '1px solid rgba(16, 185, 129, 0.4)' : e.semaforo === 'Amarillo' ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid rgba(244, 63, 94, 0.4)';
-                const fechaFormateada = new Date(e.fecha_evaluacion).toLocaleDateString();
+                // Blindaje para la fecha por si viene vacía
+                const fechaLimpia = e.fecha_evaluacion || e.created_at;
+                const fechaFormateada = fechaLimpia ? new Date(fechaLimpia).toLocaleDateString() : 'Sin Fecha';
 
                 return (
                   <tr key={e.id} style={{ transition: '0.2s' }}>
                     <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}>{fechaFormateada}</td>
-                    <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}><strong style={{ color: 'var(--text-light)' }}>{e.alumno.nombre_completo}</strong></td>
-                    <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}><span style={{ color: 'var(--text-muted)' }}>{e.tutor.nombre_completo}</span></td>
+                    <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}><strong style={{ color: 'var(--text-light)' }}>{e.alumno?.nombre_completo}</strong></td>
+                    <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}><span style={{ color: 'var(--text-muted)' }}>{e.tutor?.nombre_completo}</span></td>
                     <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)', fontWeight: 'bold', fontSize: '16px' }}>{e.promedio_final}</td>
                     <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}>
                       <span style={{ padding: '6px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, backgroundColor: bgSemaforo, color: colorSemaforo, border: borderSemaforo }}>{e.semaforo}</span>
