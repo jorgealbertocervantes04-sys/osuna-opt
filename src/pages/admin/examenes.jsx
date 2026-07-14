@@ -3,23 +3,22 @@ import { useOutletContext } from 'react-router-dom';
 import { supabase } from "../../services/supabaseClient";
 
 export default function Examenes() {
-  // Atrapamos los filtros del AdminLayout
   const { filtrosGlobales } = useOutletContext(); 
 
   const [examenes, setExamenes] = useState([]);
   const [alumnosDisponibles, setAlumnosDisponibles] = useState([]);
   const [cargando, setCargando] = useState(true);
 
-  // Modales y formularios
+  // Modales y formularios (NUEVO: idEditando para saber si estamos creando o modificando)
   const [modalAbierto, setModalAbierto] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [idEditando, setIdEditando] = useState(null);
   const [formExa, setFormExa] = useState({ id_alumno: '', semana: '', calificacion: '' });
 
-  // 1. CARGA DE DATOS DIRECTO DE SUPABASE
+  // 1. CARGA DE DATOS
   const cargarDatos = async () => {
     setCargando(true);
     try {
-      // CORRECCIÓN 404: Apuntamos a la tabla "examenes" y no a "examenes_teoricos"
       const [resExas, resUsers] = await Promise.all([
         supabase.from('examenes').select('*'),
         supabase.from('usuarios').select('id, nombre_completo, generacion, rol, unidad_negocio, lider')
@@ -31,16 +30,13 @@ export default function Examenes() {
       const exasData = resExas.data || [];
       const usersData = resUsers.data || [];
 
-      // Filtramos solo a los alumnos activos para el selector del modal
       setAlumnosDisponibles(usersData.filter(u => u.rol === 'Alumno'));
 
-      // Cruzamos los exámenes con los datos del alumno
       let exasConAlumno = exasData.map(e => {
         const alumno = usersData.find(u => u.id === e.id_alumno) || { nombre_completo: 'Usuario Borrado', generacion: '-' };
         return { ...e, alumno };
       });
 
-      // Aplicamos los filtros globales del menú izquierdo
       if (filtrosGlobales) {
         const fi = filtrosGlobales.desde ? new Date(filtrosGlobales.desde + 'T00:00:00') : new Date('2000-01-01');
         const ff = filtrosGlobales.hasta ? new Date(filtrosGlobales.hasta + 'T23:59:59') : new Date('2100-01-01');
@@ -56,7 +52,6 @@ export default function Examenes() {
         });
       }
 
-      // Ordenamos del más reciente al más antiguo
       setExamenes(exasConAlumno.sort((a,b) => new Date(b.fecha_realizacion) - new Date(a.fecha_realizacion)));
 
     } catch (error) {
@@ -71,7 +66,24 @@ export default function Examenes() {
     cargarDatos(); 
   }, [filtrosGlobales]);
 
-  // 2. FUNCIONES DE BASE DE DATOS
+  // 2. FUNCIONES DE MODAL (NUEVO: Función para Editar)
+  const abrirModalNuevo = () => {
+    setIdEditando(null);
+    setFormExa({ id_alumno: '', semana: '', calificacion: '' });
+    setModalAbierto(true);
+  };
+
+  const abrirModalEditar = (examen) => {
+    setIdEditando(examen.id);
+    setFormExa({ 
+      id_alumno: examen.id_alumno, 
+      semana: examen.semana, 
+      calificacion: examen.calificacion 
+    });
+    setModalAbierto(true);
+  };
+
+  // 3. FUNCIONES DE BASE DE DATOS (Guardar y Actualizar)
   const guardarExamen = async () => {
     if (!formExa.id_alumno || !formExa.semana || !formExa.calificacion) {
       return alert("Por favor, llena todos los campos obligatorios.");
@@ -82,16 +94,23 @@ export default function Examenes() {
       const payload = { 
         id_alumno: formExa.id_alumno,
         semana: parseInt(formExa.semana),
-        calificacion: parseFloat(formExa.calificacion),
-        fecha_realizacion: new Date().toISOString() 
+        calificacion: parseFloat(formExa.calificacion)
       };
 
-      // CORRECCIÓN 404: Insertamos en la tabla "examenes"
-      const { error } = await supabase.from('examenes').insert([payload]);
-      if (error) throw error;
+      if (!idEditando) {
+        // MODO CREAR: Le agregamos la fecha del momento
+        payload.fecha_realizacion = new Date().toISOString();
+        const { error } = await supabase.from('examenes').insert([payload]);
+        if (error) throw error;
+      } else {
+        // MODO EDITAR: Solo actualizamos los datos, no tocamos la fecha original
+        const { error } = await supabase.from('examenes').update(payload).eq('id', idEditando);
+        if (error) throw error;
+      }
 
       setModalAbierto(false); 
       setFormExa({ id_alumno: '', semana: '', calificacion: '' }); 
+      setIdEditando(null);
       cargarDatos();
     } catch (error) {
       alert("Error al guardar la calificación: " + error.message);
@@ -101,9 +120,8 @@ export default function Examenes() {
   };
 
   const eliminarExamen = async (id) => {
-    if (window.confirm("⚠️ ¿Deseas eliminar permanentemente esta calificación?")) {
+    if (window.confirm("⚠️ ¿Estás seguro que deseas eliminar permanentemente este registro?")) {
       try {
-        // CORRECCIÓN 404: Borramos de la tabla "examenes"
         const { error } = await supabase.from('examenes').delete().eq('id', id);
         if (error) throw error;
         cargarDatos();
@@ -131,7 +149,7 @@ export default function Examenes() {
           <h1 style={{ color: 'var(--text-light)', margin: 0, fontSize: '32px', fontWeight: 800 }}>Gestión de Exámenes Teóricos</h1>
           <p style={{ color: 'var(--text-muted)', margin: '5px 0 0 0', fontSize: '14px' }}>Control de evaluaciones semanales y métricas de aprobación.</p>
         </div>
-        <button onClick={() => setModalAbierto(true)} style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, boxShadow: '0 4px 15px var(--primary-glow)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <button onClick={abrirModalNuevo} style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, boxShadow: '0 4px 15px var(--primary-glow)', display: 'flex', alignItems: 'center', gap: '8px' }}>
           + Cargar Calificación
         </button>
       </div>
@@ -159,15 +177,14 @@ export default function Examenes() {
             <tr>
               <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase' }}>Fecha</th>
               <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase' }}>Alumno</th>
-              <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase' }}>Generación</th>
-              <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase' }}>Semana</th>
+              <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase' }}>Gen / Sem</th>
               <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase' }}>Calificación</th>
               <th style={{ padding: '18px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--primary)', fontSize: '12px', textTransform: 'uppercase' }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {cargando ? <tr><td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando evaluaciones...</td></tr>
-            : examenes.length === 0 ? <tr><td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>No se encontraron registros de exámenes.</td></tr>
+            {cargando ? <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando evaluaciones...</td></tr>
+            : examenes.length === 0 ? <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>No se encontraron registros de exámenes.</td></tr>
             : examenes.map(ex => {
               const c = parseFloat(ex.calificacion);
               const colText = c >= 80 ? '#34d399' : c >= 60 ? '#fbbf24' : '#fb7185';
@@ -178,8 +195,10 @@ export default function Examenes() {
                 <tr key={ex.id} style={{ transition: '0.2s', borderBottom: '1px solid var(--border-color)' }}>
                   <td style={{ padding: '18px 20px' }}>{new Date(ex.fecha_realizacion).toLocaleDateString()}</td>
                   <td style={{ padding: '18px 20px' }}><strong>{ex.alumno.nombre_completo}</strong></td>
-                  <td style={{ padding: '18px 20px', color: 'var(--primary)', fontWeight: 'bold' }}>{ex.alumno.generacion}</td>
-                  <td style={{ padding: '18px 20px' }}>Semana {ex.semana}</td>
+                  <td style={{ padding: '18px 20px' }}>
+                    <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{ex.alumno.generacion}</span><br/>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Semana {ex.semana}</span>
+                  </td>
                   <td style={{ padding: '18px 20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <span style={{ fontWeight: 'bold', fontSize: '16px' }}>{c}/100</span>
@@ -187,9 +206,15 @@ export default function Examenes() {
                     </div>
                   </td>
                   <td style={{ padding: '18px 20px' }}>
-                    <button onClick={() => eliminarExamen(ex.id)} style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>
-                      🗑️ Borrar
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {/* BOTÓN DE EDITAR AGREGADO */}
+                      <button onClick={() => abrirModalEditar(ex)} style={{ background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>
+                        ✏️ Editar
+                      </button>
+                      <button onClick={() => eliminarExamen(ex.id)} style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>
+                        🗑️
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )
@@ -198,11 +223,13 @@ export default function Examenes() {
         </table>
       </div>
 
-      {/* MODAL NUEVO EXAMEN */}
+      {/* MODAL NUEVO / EDITAR EXAMEN */}
       {modalAbierto && (
         <div style={{ position: 'fixed', zIndex: 2000, left: 0, top: 0, width: '100%', height: '100%', backgroundColor: 'rgba(5, 11, 20, 0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' }}>
           <div style={{ backgroundColor: 'var(--sidebar-bg)', padding: '35px', borderRadius: '20px', width: '100%', maxWidth: '500px', boxShadow: '0 0 40px rgba(0,0,0,0.8)', border: '1px solid var(--border-color)' }}>
-            <h2 style={{ marginTop: 0, color: 'var(--primary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '15px', marginBottom: '20px' }}>Cargar Calificación</h2>
+            <h2 style={{ marginTop: 0, color: 'var(--primary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '15px', marginBottom: '20px' }}>
+              {idEditando ? '✏️ Editar Calificación' : '+ Cargar Calificación'}
+            </h2>
             
             <div>
               <label style={labelStyle}>Alumno Evaluado *</label>
@@ -224,11 +251,11 @@ export default function Examenes() {
             </div>
 
             <div style={{ textAlign: 'right', marginTop: '15px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
-              <button onClick={() => setModalAbierto(false)} style={{ backgroundColor: 'transparent', color: 'var(--text-light)', border: '1px solid var(--border-color)', padding: '12px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', marginRight: '10px' }}>
+              <button onClick={() => { setModalAbierto(false); setIdEditando(null); }} style={{ backgroundColor: 'transparent', color: 'var(--text-light)', border: '1px solid var(--border-color)', padding: '12px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', marginRight: '10px' }}>
                 Cancelar
               </button>
               <button onClick={guardarExamen} disabled={guardando} style={{ backgroundColor: 'var(--primary)', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 15px var(--primary-glow)' }}>
-                {guardando ? 'Guardando...' : 'Guardar Calificación'}
+                {guardando ? 'Guardando...' : (idEditando ? 'Actualizar' : 'Guardar')}
               </button>
             </div>
           </div>
