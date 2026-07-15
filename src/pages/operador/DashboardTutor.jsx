@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { dataService } from "../../services/dataService";
 import { supabase } from "../../services/supabaseClient";
 
 export default function DashboardTutor() {
@@ -13,6 +12,8 @@ export default function DashboardTutor() {
   const [alumnos, setAlumnos] = useState([]);
   const [viajes, setViajes] = useState([]); 
   const [materialesTutor, setMaterialesTutor] = useState([]);
+  
+  // Catálogos extraídos dinámicamente de los usuarios
   const [catUnidades, setCatUnidades] = useState([]);
   const [catLideres, setCatLideres] = useState([]);
   const [catGerentes, setCatGerentes] = useState([]);
@@ -40,19 +41,29 @@ export default function DashboardTutor() {
       setUsuarioActual(user);
 
       try {
-        // OPTIMIZACIÓN ANTI-TIMEOUT: Eliminamos la carga masiva de todos los viajes aquí
-        const [todosUsuarios, todosMateriales, catalogos] = await Promise.all([
-          dataService.obtenerUsuarios(),
-          dataService.obtenerMaterialEstudio(),
-          dataService.obtenerCatalogos()
+        // CONEXIÓN DIRECTA A SUPABASE (Sin dataService)
+        const [resUsuarios, resMateriales] = await Promise.all([
+          supabase.from('usuarios').select('*').limit(5000),
+          supabase.from('material_estudio').select('*')
         ]);
+        
+        const todosUsuarios = resUsuarios.data || [];
+        const todosMateriales = resMateriales.data || [];
         
         setAlumnos(todosUsuarios.filter(u => u.rol === 'Alumno' && u.estatus !== 'Baja'));
         setMaterialesTutor(todosMateriales.filter(m => m.dirigido_a === 'Tutor' || m.dirigido_a === 'Ambos'));
         
-        setCatUnidades(catalogos?.unidades || []);
-        setCatLideres(catalogos?.lideres || []);
-        setCatGerentes(catalogos?.gerentes || []);
+        // Extraemos dinámicamente los catálogos de los datos reales de la BD
+        const extraerUnicos = (campo) => [...new Set(todosUsuarios.map(u => u[campo]).filter(Boolean))].sort();
+        setCatUnidades(extraerUnicos('unidad_negocio'));
+        
+        const lideresNombres = todosUsuarios.filter(u => u.rol === 'Lider').map(u => u.nombre_completo);
+        const lideresTexto = extraerUnicos('lider');
+        setCatLideres([...new Set([...lideresNombres, ...lideresTexto])].sort());
+
+        const gerentesNombres = todosUsuarios.filter(u => u.rol === 'Gerente').map(u => u.nombre_completo);
+        const gerentesTexto = extraerUnicos('gerente');
+        setCatGerentes([...new Set([...gerentesNombres, ...gerentesTexto])].sort());
 
         // Validar si el tutor ya configuró su perfil obligatorio de línea de mando
         if (!user.unidad_negocio || !user.lider || !user.gerente) {
@@ -78,7 +89,7 @@ export default function DashboardTutor() {
     }
   }, [navigate]);
 
-  // EFECTO OPTIMIZADO: Carga reactiva de viajes por alumno seleccionado para prevenir fugas y sobrecargas
+  // EFECTO OPTIMIZADO: Carga reactiva de viajes por alumno seleccionado
   useEffect(() => {
     const cargarViajesAlumno = async () => {
       if (!alumnoSeleccionado) {
@@ -86,8 +97,9 @@ export default function DashboardTutor() {
         return;
       }
       try {
-        const viajesData = await dataService.obtenerViajesPorAlumno(alumnoSeleccionado);
-        setViajes(viajesData);
+        const { data, error } = await supabase.from('viajes_diarios').select('*').eq('id_alumno', alumnoSeleccionado);
+        if (error) throw error;
+        setViajes(data || []);
       } catch (err) {
         console.error("Error al obtener viajes específicos del alumno:", err);
       }
@@ -112,17 +124,34 @@ export default function DashboardTutor() {
     localStorage.removeItem('draft_evaluacion_tutor');
   };
 
+  // ----------------------------------------------------
+  // CORRECCIÓN PRINCIPAL: Guardar perfil directo en Supabase
+  // ----------------------------------------------------
   const guardarActualizacionPerfil = async () => {
     if (!formActualizacion.unidad_negocio || !formActualizacion.lider || !formActualizacion.gerente) {
       return alert("Por favor, selecciona tu Unidad, Líder y Gerente.");
     }
-    const { exito } = await dataService.actualizarPerfilAlumno(usuarioActual.id, formActualizacion);
-    if (exito) {
+
+    try {
+      const { error } = await supabase
+        .from('usuarios')
+        .update({
+          unidad_negocio: formActualizacion.unidad_negocio,
+          lider: formActualizacion.lider,
+          gerente: formActualizacion.gerente
+        })
+        .eq('id', usuarioActual.id);
+
+      if (error) throw error;
+
       const userActualizado = { ...usuarioActual, ...formActualizacion };
       localStorage.setItem('udat_app_session', JSON.stringify(userActualizado));
       setUsuarioActual(userActualizado);
       setMostrarModalActualizacion(false);
       alert("¡Perfil de tutor configurado con éxito!");
+
+    } catch (err) {
+      alert("Error al guardar tu perfil corporativo: " + err.message);
     }
   };
 
@@ -142,9 +171,7 @@ export default function DashboardTutor() {
 
   const { promedio, semaforo, colorHex, respondidas } = obtenerCalculosEnVivo();
   
-  // ==========================================
   // EXTRACCIÓN Y CRUCEO DE EXPEDIENTE DEL ALUMNO
-  // ==========================================
   const infoAlumnoActivo = alumnos.find(a => a.id === alumnoSeleccionado);
   let estadisticasAlumno = null;
 
@@ -168,27 +195,35 @@ export default function DashboardTutor() {
     };
   }
 
+  // ----------------------------------------------------
+  // CONEXIÓN DIRECTA: Guardar Evaluación (Cardex)
+  // ----------------------------------------------------
   const enviarEvaluacionTutor = async () => {
     if (!alumnoSeleccionado) return alert("Paso 1: Selecciona un operador en práctica.");
-    // CORRECCIÓN: Se reemplaza 'notes' inexistente por el estado real 'notas'
     if (notas.trim().length < 15) return alert("Paso 3: Justificación técnica obligatoria (Mínimo 15 caracteres).");
     if (respondidas < 9) return alert("⚠️ CANDADO ACTIVO: Debes calificar los 9 puntos de la rúbrica corporativa.");
 
     setEnviando(true);
-    const payload = {
-      id_alumno: alumnoSeleccionado, id_tutor: usuarioActual.id,
-      promedio_final: parseFloat(promedio), semaforo: semaforo,
-      notes_texto: notas, fecha_evaluacion: new Date().toISOString()
-    };
+    try {
+      const payload = {
+        id_alumno: alumnoSeleccionado, 
+        id_tutor: usuarioActual.id,
+        promedio_final: parseFloat(promedio), 
+        semaforo: semaforo,
+        notas_texto: notas, // CORREGIDO: De notes_texto a notas_texto
+        fecha_evaluacion: new Date().toISOString()
+      };
 
-    const res = await dataService.guardarEvaluacion(payload);
-    if (res.exito) {
+      const { error } = await supabase.from('evaluaciones_cardex').insert([payload]);
+      if (error) throw error;
+
       alert("✓ Calificación y semáforo enviados con éxito al expediente central.");
       limpiarFormulario();
-    } else {
-      alert("Error de red al guardar: " + res.error.message);
+    } catch (err) {
+      alert("Error de red al guardar: " + err.message);
+    } finally {
+      setEnviando(false);
     }
-    setEnviando(false);
   };
 
   if (cargandoDatos) return <div style={{ color: '#fff', textAlign: 'center', padding: '50px' }}>Sincronizando expedientes operativos LARMEX...</div>;
@@ -205,15 +240,15 @@ export default function DashboardTutor() {
                 
                 <select value={formActualizacion.unidad_negocio} onChange={(e) => setFormActualizacion({...formActualizacion, unidad_negocio: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '15px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155', outline: 'none' }}>
                     <option value="">-- Selecciona Unidad de Negocio --</option>
-                    {catUnidades.map((u, i) => <option key={i} value={u.nombre}>{u.nombre}</option>)}
+                    {catUnidades.map((u, i) => <option key={i} value={u}>{u}</option>)}
                 </select>
-                <select value={formActualizacion.getente} onChange={(e) => setFormActualizacion({...formActualizacion, gerente: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '15px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155', outline: 'none' }}>
+                <select value={formActualizacion.gerente} onChange={(e) => setFormActualizacion({...formActualizacion, gerente: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '15px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155', outline: 'none' }}>
                     <option value="">-- Selecciona Gerente --</option>
-                    {catGerentes.map((g, i) => <option key={i} value={g.nombre}>{g.nombre}</option>)}
+                    {catGerentes.map((g, i) => <option key={i} value={g}>{g}</option>)}
                 </select>
                 <select value={formActualizacion.lider} onChange={(e) => setFormActualizacion({...formActualizacion, lider: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '25px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155', outline: 'none' }}>
                     <option value="">-- Selecciona Líder Operativo --</option>
-                    {catLideres.map((l, i) => <option key={i} value={l.nombre}>{l.nombre}</option>)}
+                    {catLideres.map((l, i) => <option key={i} value={l}>{l}</option>)}
                 </select>
 
                 <button onClick={guardarActualizacionPerfil} style={{ width: '100%', padding: '14px', background: '#a855f7', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Guardar Perfil Corporativo</button>
@@ -227,7 +262,7 @@ export default function DashboardTutor() {
           <span style={{ fontSize: '12px', color: '#a855f7', fontWeight: 'bold' }}>TUTOR CERTIFICADO OPT (LARMEX)</span>
           <h2 style={{ margin: 0, color: '#f8fafc' }}>{usuarioActual?.nombre_completo}</h2>
         </div>
-        <button onClick={() => { localStorage.removeItem('udat_app_session'); navigate('/app'); }} style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '8px', padding: '5px 15px', cursor: 'pointer', fontWeight: 'bold' }}>Cerrar Sesión</button>
+        <button onClick={() => { localStorage.removeItem('udat_app_session'); navigate('/'); }} style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '8px', padding: '5px 15px', cursor: 'pointer', fontWeight: 'bold' }}>Cerrar Sesión</button>
       </div>
 
       {/* BIBLIOTECA MULTIMEDIA (PPT/PDF) */}
