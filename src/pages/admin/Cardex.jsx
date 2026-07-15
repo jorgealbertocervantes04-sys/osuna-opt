@@ -12,8 +12,9 @@ export default function Cardex() {
   const [guardando, setGuardando] = useState(false);
   const [idEditando, setIdEditando] = useState(null); // NUEVO: Para saber si estamos editando
   
+  // CORRECCIÓN: Cambiamos 'notas_texto' por 'notes_texto'
   const [formData, setFormData] = useState({
-    id_alumno: '', id_tutor: '', promedio_final: '', semaforo: 'Verde', notas_texto: ''
+    id_alumno: '', id_tutor: '', promedio_final: '', semaforo: 'Verde', notes_texto: ''
   });
 
   // Estados para el Análisis de IA
@@ -73,26 +74,27 @@ export default function Cardex() {
 
   const abrirModalNuevo = () => {
     setIdEditando(null);
-    setFormData({ id_alumno: '', id_tutor: '', promedio_final: '', semaforo: 'Verde', notas_texto: '' });
+    // CORRECCIÓN: Usamos 'notes_texto'
+    setFormData({ id_alumno: '', id_tutor: '', promedio_final: '', semaforo: 'Verde', notes_texto: '' });
     setModalAbierto(true);
   };
 
-  // NUEVO: Función para precargar datos y editar
   const abrirModalEditar = (evaluacion) => {
     setIdEditando(evaluacion.id);
+    // CORRECCIÓN: Usamos 'notes_texto'
     setFormData({
       id_alumno: evaluacion.id_alumno,
       id_tutor: evaluacion.id_tutor,
       promedio_final: evaluacion.promedio_final,
       semaforo: evaluacion.semaforo,
-      notas_texto: evaluacion.notas_texto
+      notes_texto: evaluacion.notes_texto
     });
     setModalAbierto(true);
   };
 
-  // NUEVO: Guardar adaptado para Crear / Actualizar
   const guardarEvaluacion = async () => {
-    if (!formData.id_alumno || !formData.id_tutor || !formData.promedio_final || !formData.notas_texto) {
+    // CORRECCIÓN: Validamos 'notes_texto'
+    if (!formData.id_alumno || !formData.id_tutor || !formData.promedio_final || !formData.notes_texto) {
       return alert("Por favor llena todos los campos obligatorios.");
     }
 
@@ -101,12 +103,13 @@ export default function Cardex() {
 
     setGuardando(true);
 
+    // CORRECCIÓN: El payload envía 'notes_texto'
     const payload = {
       id_alumno: formData.id_alumno,
       id_tutor: formData.id_tutor,
       promedio_final: prom,
       semaforo: formData.semaforo,
-      notas_texto: formData.notas_texto
+      notes_texto: formData.notes_texto
     };
 
     try {
@@ -199,10 +202,12 @@ export default function Cardex() {
                       <span style={{ display: 'block', fontWeight: 'bold', fontSize: '16px' }}>{e.promedio_final}</span>
                       <span style={{ padding: '4px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, backgroundColor: bgSemaforo, color: colorSemaforo }}>{e.semaforo}</span>
                     </td>
-                    <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)', fontSize: '12px', maxWidth: '250px' }}>{e.notas_texto}</td>
+                    {/* CORRECCIÓN: Mostramos 'notes_texto' en la tabla */}
+                    <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)', fontSize: '12px', maxWidth: '250px' }}>{e.notes_texto}</td>
                     <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)' }}>
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <button onClick={() => handleAnalizarRiesgo(e.id, e.notas_texto)} disabled={cargandoIA} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', borderRadius: '6px', cursor: cargandoIA ? 'not-allowed' : 'pointer', fontSize: '12px', fontWeight: 700 }}>🤖 IA</button>
+                        {/* CORRECCIÓN: Pasamos 'notes_texto' al análisis de IA */}
+                        <button onClick={() => handleAnalizarRiesgo(e.id, e.notes_texto)} disabled={cargandoIA} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', borderRadius: '6px', cursor: cargandoIA ? 'not-allowed' : 'pointer', fontSize: '12px', fontWeight: 700 }}>🤖 IA</button>
                         <button onClick={() => abrirModalEditar(e)} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--info)', color: 'var(--info)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>✏️</button>
                         <button onClick={() => eliminarRegistro(e.id)} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>🗑️</button>
                       </div>
@@ -252,7 +257,8 @@ export default function Cardex() {
               </div>
               <div style={{ gridColumn: 'span 2' }}>
                 <label style={labelStyle}>Justificación / Notas *</label>
-                <textarea name="notas_texto" value={formData.notas_texto} onChange={handleChangeForm} rows="3" style={{ ...inputStyle, height: '80px', fontFamily: 'inherit' }}></textarea>
+                {/* CORRECCIÓN: El name del textarea ahora es 'notes_texto' y su value apunta a 'formData.notes_texto' */}
+                <textarea name="notes_texto" value={formData.notes_texto} onChange={handleChangeForm} rows="3" style={{ ...inputStyle, height: '80px', fontFamily: 'inherit' }}></textarea>
               </div>
             </div>
 
