@@ -1,247 +1,217 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip as RechartsTooltip, ResponsiveContainer, Legend, ComposedChart, Line
-} from 'recharts';
-import { 
-  Users, Calendar, Clock, MapPin, Target, 
-  AlertTriangle, Filter, ChevronDown, Activity, Truck, Database, ShieldAlert, BookOpen, Upload, UserPlus
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from "../../services/supabaseClient";
 
-// ==========================================
-// COMPONENTES DE UI
-// ==========================================
-const FilterSelect = ({ icon: Icon, label, options, value, onChange }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '150px' }}>
-    <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-      <Icon size={12} /> {label}
-    </label>
-    <div style={{ position: 'relative' }}>
-      <select value={value} onChange={(e) => onChange(e.target.value)} style={{ width: '100%', padding: '10px 12px', appearance: 'none', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', color: '#0f172a', fontSize: '0.875rem', fontWeight: 500, outline: 'none', cursor: 'pointer' }}>
-        <option value="ALL">Todos</option>
-        {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-      </select>
-      <ChevronDown size={16} color="#64748b" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-    </div>
-  </div>
-);
-
-const Semaforo = ({ value, thresholds, inverse = false }) => {
-  let status = 'ok';
-  if (inverse) {
-    if (value >= thresholds.critical) status = 'critical';
-    else if (value >= thresholds.warning) status = 'warning';
-  } else {
-    if (value <= thresholds.critical) status = 'critical';
-    else if (value <= thresholds.warning) status = 'warning';
-  }
-  const configs = {
-    ok: { color: '#10b981', glow: 'rgba(16, 185, 129, 0.4)', text: 'Óptimo' },
-    warning: { color: '#f59e0b', glow: 'rgba(245, 158, 11, 0.4)', text: 'Precaución' },
-    critical: { color: '#ef4444', glow: 'rgba(239, 68, 68, 0.4)', text: 'Crítico' }
-  };
-  const current = configs[status];
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 700, color: current.color }}>
-      <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: current.color, boxShadow: `0 0 8px ${current.glow}` }} />
-      {current.text}
-    </div>
-  );
-};
-
-const StatCard = ({ title, value, subtitle, icon: Icon, color, statusValue, thresholds, inverseStatus }) => (
-  <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', backgroundColor: color }} />
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-      <div style={{ background: `${color}15`, padding: '12px', borderRadius: '12px', color: color }}><Icon size={24} /></div>
-      {statusValue !== undefined && thresholds && <Semaforo value={statusValue} thresholds={thresholds} inverse={inverseStatus} />}
-    </div>
-    <div>
-      <h3 style={{ margin: 0, color: '#0f172a', fontSize: '1.875rem', fontWeight: 900 }}>{value}</h3>
-      <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '0.875rem', fontWeight: 600 }}>{title}</p>
-      {subtitle && <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '0.75rem' }}>{subtitle}</p>}
-    </div>
-  </div>
-);
-
-const ProgressBar = ({ current, target, label, color = "#3b82f6" }) => {
-  const percentage = target > 0 ? Math.min(Math.round((current / target) * 100), 100) : 0;
-  return (
-    <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '4px', fontWeight: 600 }}>
-        <span style={{ color: '#475569' }}>{label}</span>
-        <span style={{ color: color }}>{current.toLocaleString()} / {target.toLocaleString()} ({percentage}%)</span>
-      </div>
-      <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
-        <div style={{ width: `${percentage}%`, height: '100%', backgroundColor: color, borderRadius: '4px', transition: 'width 0.5s ease-in-out' }} />
-      </div>
-    </div>
-  );
-};
-
-// ==========================================
-// VISTA PRINCIPAL: DASHBOARD DIRECTIVO
-// ==========================================
 export default function DashboardGeneral() {
-  const navigate = useNavigate();
-  const [dbStatus, setDbStatus] = useState('Conectando a Supabase...');
-  const [dbColor, setDbColor] = useState('#f59e0b');
-  
-  const [usuarios, setUsuarios] = useState([]);
-  const [viajes, setViajes] = useState([]);
-  
-  // NUEVO: Estado para Catálogos Dinámicos
-  const [catUnidades, setCatUnidades] = useState([]);
-  const [catLideres, setCatLideres] = useState([]);
-  const [catGerentes, setCatGerentes] = useState([]);
-  
-  const [pestañaActiva, setPestañaActiva] = useState('general');
-  const [filtroFecha, setFiltroFecha] = useState('Este Mes');
-  const [filtroUN, setFiltroUN] = useState('ALL');
-  const [filtroGeneracion, setFiltroGeneracion] = useState('ALL');
-  const [filtroLider, setFiltroLider] = useState('ALL');
-  const [filtroGerente, setFiltroGerente] = useState('ALL');
+  const [alumnos, setAlumnos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  const cargarDatosOperativos = async () => {
+    setCargando(true);
+    try {
+      // Solo traemos a los alumnos, que son el motor de la operación
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('rol', 'Alumno');
+
+      if (error) throw error;
+      setAlumnos(data || []);
+    } catch (err) {
+      console.error("Falla en el radar:", err);
+    } finally {
+      setCargando(false);
+    }
+  };
 
   useEffect(() => {
-    const cargarDatosCentrales = async () => {
-      try {
-        const [resU, resV, resUn, resLid, resGer] = await Promise.all([
-          supabase.from('usuarios').select('id, rol, nombre_completo, unidad_negocio, generacion, lider, gerente, etapa_actual, estatus, tutor_opt, created_at, fecha_entrega_operacion, fecha_inicio_opt'),
-          supabase.from('viajes_diarios').select('id_alumno, km_recorridos, tiempo_total_minutos, hora_inicio'),
-          supabase.from('cat_unidades').select('nombre'),
-          supabase.from('cat_lideres').select('nombre'),
-          supabase.from('cat_gerentes').select('nombre')
-        ]);
-        if (!resU.error) setUsuarios(resU.data || []);
-        if (!resV.error) setViajes(resV.data || []);
-        if (!resUn.error) setCatUnidades(resUn.data.map(u => u.nombre));
-        if (!resLid.error) setCatLideres(resLid.data.map(l => l.nombre));
-        if (!resGer.error) setCatGerentes(resGer.data.map(g => g.nombre));
-        
-        setDbStatus('Base de Datos Conectada'); setDbColor('#10b981');
-      } catch (err) {
-        setDbStatus('Error de Conexión DB'); setDbColor('#ef4444');
-      }
-    };
-    cargarDatosCentrales();
+    cargarDatosOperativos();
   }, []);
 
-  const generacionesUnicas = useMemo(() => [...new Set(usuarios.map(u => u.generacion).filter(Boolean))], [usuarios]);
+  // ==========================================
+  // 1. CÁLCULO DE KPIs PRINCIPALES
+  // ==========================================
+  const totalAlumnos = alumnos.length;
+  const kpiActivos = alumnos.filter(a => a.estatus === 'En proceso').length;
+  const kpiLiberados = alumnos.filter(a => a.estatus === 'Liberado').length;
+  const kpiBajas = alumnos.filter(a => a.estatus === 'Baja').length;
 
-  const { datosFiltrados, alertasIA, dataLideres } = useMemo(() => {
-    let alumnosProcesados = [];
-    let alertas = [];
-    
-    const soloAlumnos = usuarios.filter(u => u.rol === 'Alumno' && u.estatus !== 'Baja');
-    
-    soloAlumnos.forEach(a => {
-      const misViajes = viajes.filter(v => v.id_alumno === a.id);
-      const kmAcumulados = misViajes.reduce((sum, v) => sum + (parseFloat(v.km_recorridos) || 0), 0);
-      const minsAcumulados = misViajes.reduce((sum, v) => sum + (parseFloat(v.tiempo_total_minutos) || 0), 0);
-      
-      let diasSinManejar = misViajes.length > 0 
-        ? Math.max(0, Math.floor((new Date().getTime() - Math.max(...misViajes.map(v => new Date(v.hora_inicio).getTime()))) / (1000 * 60 * 60 * 24)))
-        : 10;
-
-      let diasAsignacion = a.tutor_opt ? 0 : 5;
-      
-      const fechaInicioReal = a.fecha_entrega_operacion || a.fecha_inicio_opt || a.created_at;
-      const diasDesdeEntrega = fechaInicioReal ? Math.max(0, Math.floor((new Date().getTime() - new Date(fechaInicioReal).getTime()) / (1000 * 60 * 60 * 24))) : 0;
-      let diasAtraso = 0;
-
-      if (diasDesdeEntrega >= 56 && a.etapa_actual !== 'Certificado') {
-        diasAtraso = diasDesdeEntrega - 56;
-        alertas.unshift(`🚨 ALERTA DIRECTIVA - CERTIFICACIÓN VENCIDA: ${a.nombre_completo} excedió las 8 semanas. Lleva ${diasAtraso} días extra.`);
-      }
-
-      alumnosProcesados.push({
-        ...a,
-        kmActual: kmAcumulados,
-        kmMeta: 4000,
-        hrsActual: parseFloat((minsAcumulados / 60).toFixed(1)),
-        hrsMeta: 100,
-        diasAsignacion: diasAsignacion,
-        diasSinManejo: diasSinManejar,
-        diasAtrasoCertificacion: diasAtraso,
-        un: a.unidad_negocio || 'S/A'
-      });
-    });
-
-    const filtrados = alumnosProcesados.filter(a => {
-      return (filtroUN === 'ALL' || a.un === filtroUN) &&
-             (filtroGeneracion === 'ALL' || a.generacion === filtroGeneracion) &&
-             (filtroLider === 'ALL' || a.lider === filtroLider) &&
-             (filtroGerente === 'ALL' || a.gerente === filtroGerente);
-    });
-
-    const agrupadoLideres = filtrados.reduce((acc, a) => {
-        const lid = a.lider || "Sin Asignar";
-        if (!acc[lid]) acc[lid] = { name: lid, km: 0, horas: 0 };
-        acc[lid].km += a.kmActual;
-        acc[lid].horas += a.hrsActual;
-        return acc;
+  // ==========================================
+  // 2. MOTORES DE AGRUPACIÓN (Gerentes, Líderes, Unidades)
+  // ==========================================
+  const agruparDatos = (llave) => {
+    const conteo = alumnos.reduce((acc, alumno) => {
+      const grupo = alumno[llave] || 'Sin Asignar';
+      acc[grupo] = (acc[grupo] || 0) + 1;
+      return acc;
     }, {});
+    // Convertir a arreglo y ordenar de mayor a menor
+    return Object.entries(conteo).sort((a, b) => b[1] - a[1]);
+  };
 
-    return { datosFiltrados: filtrados, alertasIA: alertas, dataLideres: Object.values(agrupadoLideres) };
-  }, [usuarios, viajes, filtroUN, filtroGeneracion, filtroLider, filtroGerente]);
+  const alumnosPorGerente = agruparDatos('gerente');
+  const alumnosPorLider = agruparDatos('lider');
+  const alumnosPorUnidad = agruparDatos('unidad_negocio');
 
-  const kpis = useMemo(() => {
-    if (datosFiltrados.length === 0) return { kmTotal: 0, hrsTotal: 0, promAsignacion: 0, promSinManejo: 0 };
-    const kmTotal = datosFiltrados.reduce((acc, a) => acc + a.kmActual, 0);
-    const hrsTotal = datosFiltrados.reduce((acc, a) => acc + a.hrsActual, 0);
-    const promAsignacion = datosFiltrados.reduce((acc, a) => acc + a.diasAsignacion, 0) / datosFiltrados.length;
-    const promSinManejo = datosFiltrados.reduce((acc, a) => acc + a.diasSinManejo, 0) / datosFiltrados.length;
-    return { kmTotal, hrsTotal, promAsignacion: promAsignacion.toFixed(1), promSinManejo: promSinManejo.toFixed(1) };
-  }, [datosFiltrados]);
+  // ==========================================
+  // 3. RADAR DE ALERTAS CRÍTICAS (Tiempos muertos y falta de OPT)
+  // ==========================================
+  const hoy = new Date();
+  
+  const alertasCriticas = alumnos.filter(a => a.estatus === 'En proceso').map(alumno => {
+    let diasSinOPT = 0;
+    let diasDesdeBanderazo = 0;
+    let tieneRiesgo = false;
+    let mensajesRiesgo = [];
+
+    // Alerta 1: Sin OPT asignado
+    if (!alumno.opt_asignado || alumno.opt_asignado === 'Sin Asignar') {
+      const fechaIngreso = new Date(alumno.created_at || hoy);
+      diasSinOPT = Math.floor((hoy - fechaIngreso) / (1000 * 60 * 60 * 24));
+      if (diasSinOPT > 3) { // Si pasan de 3 días sin instructor, es alerta roja
+        tieneRiesgo = true;
+        mensajesRiesgo.push(`⚠️ ${diasSinOPT} días en sistema sin OPT asignado.`);
+      }
+    }
+
+    // Alerta 2: Días Inactivos (Por ahora calculado desde el banderazo, luego lo puedes conectar a tu tabla de GPS/Viajes)
+    if (alumno.fecha_entrega_operacion) {
+      const fechaBanderazo = new Date(alumno.fecha_entrega_operacion);
+      diasDesdeBanderazo = Math.floor((hoy - fechaBanderazo) / (1000 * 60 * 60 * 24));
+      // Aquí simulamos "días sin conducir". Idealmente esto leerá de tu tabla de 'bitacoras'
+      if (diasDesdeBanderazo > 15) { 
+        tieneRiesgo = true;
+        mensajesRiesgo.push(`🛑 ${diasDesdeBanderazo} días desde banderazo (Revisar actividad).`);
+      }
+    }
+
+    return { ...alumno, diasSinOPT, diasDesdeBanderazo, tieneRiesgo, mensajesRiesgo };
+  }).filter(a => a.tieneRiesgo); // Solo mostramos los que traen focos rojos
+
+  // ==========================================
+  // ESTILOS REUTILIZABLES
+  // ==========================================
+  const cardStyle = { background: '#1e293b', borderRadius: '16px', padding: '20px', border: '1px solid #334155', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)' };
+  const titleStyle = { color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '15px', marginTop: 0, fontWeight: 700 };
 
   return (
-    <div style={{ padding: '24px', backgroundColor: '#f1f5f9', minHeight: '100vh', fontFamily: 'system-ui' }}>
-      <header style={{ marginBottom: '32px' }}>
-        <h1 style={{ margin: 0, fontSize: '2rem', color: '#0f172a', fontWeight: 900 }}>Dashboard General LARMEX</h1>
-        <div style={{ display: 'flex', gap: '16px', background: '#fff', padding: '20px', borderRadius: '16px', marginTop: '20px', flexWrap: 'wrap' }}>
-          <FilterSelect icon={MapPin} label="Unidad" value={filtroUN} onChange={setFiltroUN} options={catUnidades} />
-          <FilterSelect icon={Users} label="Generación" value={filtroGeneracion} onChange={setFiltroGeneracion} options={generacionesUnicas} />
-          <FilterSelect icon={Target} label="Líder" value={filtroLider} onChange={setFiltroLider} options={catLideres} />
-          <FilterSelect icon={Target} label="Gerente" value={filtroGerente} onChange={setFiltroGerente} options={catGerentes} />
-        </div>
-      </header>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-        <button onClick={() => setPestañaActiva('general')} style={{ padding: '12px', background: pestañaActiva === 'general' ? '#0f172a' : '#fff', borderRadius: '8px', border: 'none', cursor: 'pointer' }}>Vista General</button>
-        <button onClick={() => setPestañaActiva('metas')} style={{ padding: '12px', background: pestañaActiva === 'metas' ? '#0f172a' : '#fff', borderRadius: '8px', border: 'none', cursor: 'pointer' }}>Avances vs Metas</button>
+    <div style={{ animation: 'fadeIn 0.5s ease', color: 'white', paddingBottom: '40px' }}>
+      
+      <div style={{ marginBottom: '30px' }}>
+        <h1 style={{ margin: '0 0 5px 0', fontSize: '32px', color: '#60a5fa', fontWeight: 900 }}>Visor Estratégico General</h1>
+        <p style={{ color: '#94a3b8', margin: 0 }}>Métricas operativas en tiempo real. Vista de solo lectura.</p>
       </div>
 
-      {pestañaActiva === 'general' && (
+      {cargando ? (
+        <div style={{ textAlign: 'center', padding: '50px', color: '#94a3b8' }}>Sincronizando telemetría...</div>
+      ) : (
         <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '24px', marginBottom: '32px' }}>
-                <StatCard title="Kilómetros Totales" value={`${kpis.kmTotal.toLocaleString()} km`} icon={Truck} color="#3b82f6" />
-                <StatCard title="Horas Totales" value={`${kpis.hrsTotal.toLocaleString()} hrs`} icon={Activity} color="#10b981" />
+          {/* 1. CLUSTER DE KPIs PRINCIPALES */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+            <div style={{ ...cardStyle, borderLeft: '4px solid #3b82f6' }}>
+              <h3 style={titleStyle}>Total Histórico</h3>
+              <p style={{ margin: 0, fontSize: '38px', fontWeight: 900, color: 'white' }}>{totalAlumnos}</p>
             </div>
-            <div style={{ background: '#fff', padding: '24px', borderRadius: '16px' }}>
-                <ResponsiveContainer width="100%" height={300}>
-                <ComposedChart data={dataLideres}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="km" fill="#3b82f6" />
-                    <Line dataKey="horas" stroke="#f59e0b" />
-                </ComposedChart>
-                </ResponsiveContainer>
+            <div style={{ ...cardStyle, borderLeft: '4px solid #fbbf24' }}>
+              <h3 style={titleStyle}>En Proceso (Activos)</h3>
+              <p style={{ margin: 0, fontSize: '38px', fontWeight: 900, color: '#fbbf24' }}>{kpiActivos}</p>
             </div>
-        </>
-      )}
+            <div style={{ ...cardStyle, borderLeft: '4px solid #34d399' }}>
+              <h3 style={titleStyle}>Liberados (Meta)</h3>
+              <p style={{ margin: 0, fontSize: '38px', fontWeight: 900, color: '#34d399' }}>{kpiLiberados}</p>
+            </div>
+            <div style={{ ...cardStyle, borderLeft: '4px solid #f87171' }}>
+              <h3 style={titleStyle}>Bajas</h3>
+              <p style={{ margin: 0, fontSize: '38px', fontWeight: 900, color: '#f87171' }}>{kpiBajas}</p>
+            </div>
+          </div>
 
-      {pestañaActiva === 'metas' && (
-        <div style={{ background: '#fff', padding: '20px', borderRadius: '12px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr><th>Alumno</th><th>Progreso KM</th></tr></thead>
-                <tbody>{datosFiltrados.map(a => <tr key={a.id}><td>{a.nombre_completo}</td><td><ProgressBar current={a.kmActual} target={a.kmMeta} /></td></tr>)}</tbody>
-            </table>
-        </div>
+          {/* 2. MEDIDORES POR JERARQUÍA (GERENTES Y LÍDERES) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+            
+            {/* Panel Gerentes */}
+            <div style={cardStyle}>
+              <h3 style={titleStyle}>📊 Alumnos por Gerente</h3>
+              {alumnosPorGerente.length === 0 ? <p style={{ color: '#64748b', fontSize: '14px' }}>Sin datos.</p> : alumnosPorGerente.map(([gerente, cantidad]) => (
+                <div key={gerente} style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}>
+                    <span style={{ color: '#e2e8f0' }}>{gerente}</span>
+                    <strong style={{ color: '#60a5fa' }}>{cantidad} alumnos</strong>
+                  </div>
+                  <div style={{ background: '#0f172a', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ background: '#3b82f6', height: '100%', width: `${(cantidad / totalAlumnos) * 100}%`, borderRadius: '4px' }}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Panel Líderes */}
+            <div style={cardStyle}>
+              <h3 style={titleStyle}>🎯 Carga por Líder Operativo</h3>
+              {alumnosPorLider.length === 0 ? <p style={{ color: '#64748b', fontSize: '14px' }}>Sin datos.</p> : alumnosPorLider.slice(0, 5).map(([lider, cantidad]) => (
+                <div key={lider} style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}>
+                    <span style={{ color: '#e2e8f0' }}>{lider}</span>
+                    <strong style={{ color: '#a855f7' }}>{cantidad} alumnos</strong>
+                  </div>
+                  <div style={{ background: '#0f172a', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ background: '#a855f7', height: '100%', width: `${(cantidad / totalAlumnos) * 100}%`, borderRadius: '4px' }}></div>
+                  </div>
+                </div>
+              ))}
+              {alumnosPorLider.length > 5 && <p style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', marginTop: '10px' }}>Mostrando el Top 5 de Líderes</p>}
+            </div>
+
+            {/* Panel Unidades de Negocio */}
+            <div style={cardStyle}>
+              <h3 style={titleStyle}>🏢 Distribución por Base (Unidad)</h3>
+              {alumnosPorUnidad.length === 0 ? <p style={{ color: '#64748b', fontSize: '14px' }}>Sin datos.</p> : alumnosPorUnidad.map(([unidad, cantidad]) => (
+                <div key={unidad} style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}>
+                    <span style={{ color: '#e2e8f0' }}>{unidad}</span>
+                    <strong style={{ color: '#10b981' }}>{cantidad} alumnos</strong>
+                  </div>
+                  <div style={{ background: '#0f172a', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ background: '#10b981', height: '100%', width: `${(cantidad / totalAlumnos) * 100}%`, borderRadius: '4px' }}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+          </div>
+
+          {/* 3. RADAR DE ALERTAS CRÍTICAS */}
+          <div style={{ ...cardStyle, border: '1px solid rgba(244, 63, 94, 0.3)', background: 'linear-gradient(180deg, #1e293b 0%, rgba(244, 63, 94, 0.05) 100%)' }}>
+            <h3 style={{ ...titleStyle, color: '#fb7185' }}>🚨 Radar de Fugas Operativas (Atención Requerida)</h3>
+            <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px' }}>Muestra alumnos activos sin asignación de tutor (huérfanos) o con inactividad prolongada.</p>
+            
+            {alertasCriticas.length === 0 ? (
+              <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '20px', borderRadius: '8px', textAlign: 'center', color: '#34d399', border: '1px dashed #34d399' }}>
+                ✅ Excelente. No hay alertas críticas en la operación. Todos los alumnos están asignados y corriendo.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: '10px' }}>
+                {alertasCriticas.map(a => (
+                  <div key={a.id} style={{ background: '#0f172a', padding: '15px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '3px solid #f43f5e' }}>
+                    <div>
+                      <h4 style={{ margin: '0 0 5px 0', color: '#f8fafc', fontSize: '15px' }}>{a.nombre_completo}</h4>
+                      <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>
+                        Líder: <b style={{color:'white'}}>{a.lider || 'N/A'}</b> | Unidad: <b style={{color:'white'}}>{a.unidad_negocio || 'N/A'}</b>
+                      </p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      {a.mensajesRiesgo.map((msg, idx) => (
+                        <div key={idx} style={{ color: '#fb7185', fontSize: '12px', fontWeight: 'bold', background: 'rgba(244, 63, 94, 0.1)', padding: '4px 8px', borderRadius: '4px', marginBottom: '4px' }}>
+                          {msg}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </>
       )}
     </div>
   );
