@@ -18,34 +18,35 @@ export default function LoginGeneral() {
     setErrorMsg('');
 
     try {
-      // 1. Buscamos al usuario usando .maybeSingle() para evitar el error 406
-      const { data, error } = await supabase
+      // 1. Traemos TODOS los registros que coincidan con ese correo (sin límite)
+      const { data: usuariosEncontrados, error } = await supabase
         .from('usuarios')
         .select('*')
-        .eq('correo', email.trim().toLowerCase())
-        .maybeSingle(); // <--- EL CAMBIO CLAVE ESTÁ AQUÍ
+        .eq('correo', email.trim().toLowerCase());
 
       if (error) {
         throw new Error("Error de conexión: " + error.message);
       }
 
-      // 2. Si no encontró a nadie, data será null
-      if (!data) {
+      if (!usuariosEncontrados || usuariosEncontrados.length === 0) {
         throw new Error("Credenciales inválidas o correo no registrado.");
       }
 
-      // 3. Verificamos la contraseña
-      if (data.password !== password) {
+      // 2. Buscamos entre los duplicados cuál es el que tiene la contraseña correcta
+      const usuarioValido = usuariosEncontrados.find(u => u.password === password);
+
+      // 3. Si ninguno de los duplicados tiene esa contraseña, rebotamos
+      if (!usuarioValido) {
         throw new Error("Contraseña incorrecta. Intenta de nuevo.");
       }
 
-      // 4. Verificamos que tenga un rol autorizado (Comenta esto si tú eres "Tutor" o "Alumno" en tus pruebas)
-      if (data.rol === 'Alumno' || data.rol === 'Tutor') {
-         throw new Error("Acceso denegado. No tienes nivel de autorización de Mando.");
+      // 4. Verificamos que ese perfil exacto tenga permisos de mando
+      if (usuarioValido.rol === 'Alumno' || usuarioValido.rol === 'Tutor') {
+         throw new Error("Acceso denegado. Este perfil no tiene autorización de Mando.");
       }
 
-      // 5. Si todo está correcto, guardamos la sesión y lo dejamos pasar
-      localStorage.setItem('udat_app_session', JSON.stringify(data));
+      // 5. ¡Pase VIP! Guardamos la sesión del perfil correcto y entramos
+      localStorage.setItem('udat_app_session', JSON.stringify(usuarioValido));
       navigate('/admin/dashboard'); 
 
     } catch (err) {
