@@ -8,6 +8,7 @@ export default function Directorio() {
 
   // Estados de los datos
   const [usuarios, setUsuarios] = useState([]);
+  const [catTutores, setCatTutores] = useState([]); // <-- NUEVO TANQUE PARA EL CATÁLOGO DE TUTORES
   const [cargando, setCargando] = useState(true);
 
   // Estados de filtros locales y búsqueda
@@ -27,26 +28,31 @@ export default function Directorio() {
     fecha_entrega_operacion: '' 
   });
 
-  // CARGAR DATOS REALES AL INICIAR LA PANTALLA
-  const cargarUsuarios = async () => {
+  // CARGAR DATOS REALES Y CATÁLOGOS AL INICIAR LA PANTALLA
+  const cargarDatos = async () => {
     setCargando(true);
     try {
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('*');
+      // Hacemos una doble extracción simultánea de Supabase
+      const [resUsuarios, resTutores] = await Promise.all([
+        supabase.from('usuarios').select('*'),
+        supabase.from('cat_tutores').select('*').order('nombre', { ascending: true }) // Ordenados alfabéticamente
+      ]);
       
-      if (error) throw error;
-      setUsuarios(data || []);
+      if (resUsuarios.error) throw resUsuarios.error;
+      if (resTutores.error) throw resTutores.error;
+      
+      setUsuarios(resUsuarios.data || []);
+      setCatTutores(resTutores.data || []); // Llenamos el estado con el catálogo oficial
     } catch (err) {
       console.error("Error al cargar el directorio:", err);
-      alert("Error al cargar el directorio: " + err.message);
+      alert("Error al cargar la información: " + err.message);
     } finally {
       setCargando(false);
     }
   };
 
   useEffect(() => {
-    cargarUsuarios();
+    cargarDatos();
   }, []);
 
   // LÓGICA DE FILTRADO INTELIGENTE
@@ -73,8 +79,6 @@ export default function Directorio() {
     
     return pasaGlobalGen && pasaGlobalUni && pasaGlobalLid && pasaGlobalGer && pasaFecha && pasaBusqueda && pasaRol && pasaEstatus;
   });
-
-  const optDisponibles = usuarios.filter(u => u.rol === 'Tutor');
 
   // FUNCIONES DEL MODAL
   const handleChangeForm = (e) => {
@@ -127,7 +131,6 @@ export default function Directorio() {
             if (error) throw error;
 
             // 🚀 MOTOR DE DOBLE INYECCIÓN (Automatización a Catálogos)
-            // Esto bifurca el nombre del usuario a su tabla correspondiente sin interrumpir el proceso
             try {
               const payloadCatalogo = { nombre: datosAGuardar.nombre_completo };
               if (datosAGuardar.rol === 'Gerente') {
@@ -150,7 +153,7 @@ export default function Directorio() {
         }
 
         setModalAbierto(false);
-        cargarUsuarios(); 
+        cargarDatos(); // Recargamos para traer posibles nuevos tutores
     } catch (err) {
         console.error("Error al guardar:", err);
         alert("Error al guardar: " + err.message);
@@ -163,7 +166,7 @@ export default function Directorio() {
         try {
             const { error } = await supabase.from('usuarios').delete().eq('id', id);
             if (error) throw error;
-            cargarUsuarios();
+            cargarDatos();
         } catch (err) {
             console.error("Error al eliminar:", err);
             alert("Error al eliminar: " + err.message);
@@ -344,7 +347,10 @@ export default function Directorio() {
                     <label style={{ ...labelStyle, color: 'var(--purple)' }}>👨‍🏫 Asignar Tutor (OPT)</label>
                     <select name="opt_asignado" value={formData.opt_asignado} onChange={handleChangeForm} style={{ ...inputStyle, marginBottom: 0, borderColor: 'var(--purple)' }}>
                       <option value="">Seleccionar Tutor...</option>
-                      {optDisponibles.map(t => <option key={t.id} value={t.nombre_completo}>{t.nombre_completo}</option>)}
+                      {/* AHORA LEE DIRECTAMENTE DE LA TABLA CAT_TUTORES */}
+                      {catTutores.map((t, idx) => (
+                        <option key={t.id || idx} value={t.nombre}>{t.nombre}</option>
+                      ))}
                     </select>
                   </div>
 
