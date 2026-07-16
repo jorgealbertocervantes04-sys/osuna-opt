@@ -21,10 +21,10 @@ export default function LoginGeneral() {
       // USAMOS EXACTAMENTE EL MISMO MOTOR QUE EN LOGIN ADMIN
       const resultado = await authService.loginAdmin(email, password);
 
-      if (resultado.exito) {
+     if (resultado.exito) {
         // Guardamos la sesión y entramos
         localStorage.setItem('udat_app_session', JSON.stringify(resultado.datos));
-        navigate('/admin/dashboard'); 
+        navigate('/general'); // <--- ESTO ES LO QUE TIENES QUE CAMBIAR
       } else {
         setErrorMsg(resultado.mensaje || 'Contraseña incorrecta o correo no registrado.');
       }

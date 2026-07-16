@@ -82,7 +82,7 @@ const Portal = () => {
 };
 
 // ==========================================
-// CANDADO DIGITAL DE SEGURIDAD
+// CANDADO DIGITAL DE SEGURIDAD BLINDADO (AHORA ACEPTA ARREGLOS)
 // ==========================================
 const RutaProtegida = ({ children, rolPermitido }) => {
   const session = localStorage.getItem('udat_app_session');
@@ -90,12 +90,18 @@ const RutaProtegida = ({ children, rolPermitido }) => {
   if (!session) return <Navigate to="/" replace />;
   
   const usuario = JSON.parse(session);
+  const rolActual = usuario.rol || usuario.role;
 
-  if (rolPermitido && usuario.role !== rolPermitido && usuario.rol !== rolPermitido) {
-    if (usuario.rol === 'Alumno') return <Navigate to="/app/alumno" replace />;
-    if (usuario.rol === 'Tutor') return <Navigate to="/app/tutor" replace />;
-    if (usuario.rol === 'Admin') return <Navigate to="/admin" replace />;
-    if (usuario.rol === 'General') return <Navigate to="/general" replace />;
+  if (rolPermitido) {
+    // Convertimos a arreglo para que una ruta acepte a varios roles
+    const rolesPermitidos = Array.isArray(rolPermitido) ? rolPermitido : [rolPermitido];
+
+    if (!rolesPermitidos.includes(rolActual)) {
+      if (rolActual === 'Alumno') return <Navigate to="/app/alumno" replace />;
+      if (rolActual === 'Tutor') return <Navigate to="/app/tutor" replace />;
+      if (rolActual === 'Admin') return <Navigate to="/admin" replace />;
+      return <Navigate to="/" replace />;
+    }
   }
 
   return children;
@@ -139,8 +145,8 @@ export default function App() {
           <Route path="encuestas" element={<Encuestas />} />
         </Route>
 
-        {/* RUTA VISTA GENERAL DIRECTIVA */}
-        <Route path="/general" element={<RutaProtegida rolPermitido="General"><AdminDashboardGeneral /></RutaProtegida>} />
+        {/* RUTA VISTA GENERAL DIRECTIVA (AHORA PERMITE VARIOS ROLES AL MISMO TIEMPO) */}
+        <Route path="/general" element={<RutaProtegida rolPermitido={['Admin', 'General', 'Gerente', 'Lider']}><AdminDashboardGeneral /></RutaProtegida>} />
 
         {/* ERROR 404 CATCH-ALL */}
         <Route path="*" element={<NotFound />} />
