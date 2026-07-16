@@ -18,15 +18,19 @@ export default function LoginGeneral() {
     setErrorMsg('');
 
     try {
-      // 1. Buscamos al usuario en la base de datos por su correo
+      // 1. Buscamos al usuario usando .maybeSingle() para evitar el error 406
       const { data, error } = await supabase
         .from('usuarios')
         .select('*')
         .eq('correo', email.trim().toLowerCase())
-        .single();
+        .maybeSingle(); // <--- EL CAMBIO CLAVE ESTÁ AQUÍ
 
-      // 2. Si hay error o no existe, bloqueamos
-      if (error || !data) {
+      if (error) {
+        throw new Error("Error de conexión: " + error.message);
+      }
+
+      // 2. Si no encontró a nadie, data será null
+      if (!data) {
         throw new Error("Credenciales inválidas o correo no registrado.");
       }
 
@@ -35,14 +39,14 @@ export default function LoginGeneral() {
         throw new Error("Contraseña incorrecta. Intenta de nuevo.");
       }
 
-      // 4. Verificamos que tenga un rol de administrador o gerencia (Opcional, pero recomendado)
+      // 4. Verificamos que tenga un rol autorizado (Comenta esto si tú eres "Tutor" o "Alumno" en tus pruebas)
       if (data.rol === 'Alumno' || data.rol === 'Tutor') {
          throw new Error("Acceso denegado. No tienes nivel de autorización de Mando.");
       }
 
       // 5. Si todo está correcto, guardamos la sesión y lo dejamos pasar
       localStorage.setItem('udat_app_session', JSON.stringify(data));
-      navigate('/admin/dashboard'); // Aseguramos que caiga dentro de las rutas del layout
+      navigate('/admin/dashboard'); 
 
     } catch (err) {
       setErrorMsg(err.message);
@@ -72,7 +76,7 @@ export default function LoginGeneral() {
           placeholder="Contraseña maestra" 
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleLogin()} // Permite entrar presionando "Enter"
+          onKeyDown={(e) => e.key === 'Enter' && handleLogin()} 
           style={{ width: '100%', padding: '15px', marginBottom: '25px', border: '1px solid #475569', borderRadius: '10px', boxSizing: 'border-box', fontSize: '15px', background: '#0f172a', color: '#ffffff', outline: 'none' }}
         />
         
