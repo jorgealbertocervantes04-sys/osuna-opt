@@ -19,7 +19,7 @@ export default function Directorio() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [idEditando, setIdEditando] = useState(null);
   
-  // Estado del formulario del modal (SE AGREGA fecha_entrega_operacion)
+  // Estado del formulario del modal
   const [formData, setFormData] = useState({
     nombre_completo: '', generacion: '', telefono: '', numero_empleado: '',
     rol: 'Alumno', estatus: 'En proceso', empresa: '', unidad_negocio: '',
@@ -27,7 +27,7 @@ export default function Directorio() {
     fecha_entrega_operacion: '' 
   });
 
-  // CARGAR DATOS REALES AL INICIAR LA PANTALLA (Conexión Directa a Supabase)
+  // CARGAR DATOS REALES AL INICIAR LA PANTALLA
   const cargarUsuarios = async () => {
     setCargando(true);
     try {
@@ -49,24 +49,23 @@ export default function Directorio() {
     cargarUsuarios();
   }, []);
 
-  // LÓGICA DE FILTRADO INTELIGENTE (Combina menú izquierdo con pantalla central)
+  // LÓGICA DE FILTRADO INTELIGENTE
   const usuariosFiltrados = usuarios.filter(u => {
-    // Si filtrosGlobales aún no carga, pasamos todo
     if (!filtrosGlobales) return true;
 
-    // A. Filtros Globales (Menú Izquierdo)
+    // A. Filtros Globales
     let pasaGlobalGen = filtrosGlobales.generacion === 'TODOS' || u.generacion === filtrosGlobales.generacion;
     let pasaGlobalUni = filtrosGlobales.unidad === 'TODOS' || u.unidad_negocio === filtrosGlobales.unidad;
     let pasaGlobalLid = filtrosGlobales.lider === 'TODOS' || u.lider === filtrosGlobales.lider;
     let pasaGlobalGer = filtrosGlobales.gerente === 'TODOS' || u.gerente === filtrosGlobales.gerente;
     
-    // Rango de fechas (usando fecha_registro si existe, o omitiendo si no)
+    // Rango de fechas
     let d = u.created_at ? new Date(u.created_at) : (u.fecha_registro ? new Date(u.fecha_registro) : new Date());
     const fi = filtrosGlobales.desde ? new Date(filtrosGlobales.desde + 'T00:00:00') : new Date('2000-01-01');
     const ff = filtrosGlobales.hasta ? new Date(filtrosGlobales.hasta + 'T23:59:59') : new Date('2100-01-01');
     let pasaFecha = d >= fi && d <= ff;
 
-    // B. Filtros Locales (Pantalla central)
+    // B. Filtros Locales
     const pasaBusqueda = (u.nombre_completo?.toLowerCase() || '').includes(busqueda.toLowerCase()) || 
                          (u.numero_empleado?.toLowerCase() || '').includes(busqueda.toLowerCase());
     const pasaRol = filtroRol === 'TODOS' || u.rol === filtroRol;
@@ -75,7 +74,6 @@ export default function Directorio() {
     return pasaGlobalGen && pasaGlobalUni && pasaGlobalLid && pasaGlobalGer && pasaFecha && pasaBusqueda && pasaRol && pasaEstatus;
   });
 
-  // Lista de tutores para el menú desplegable del modal
   const optDisponibles = usuarios.filter(u => u.rol === 'Tutor');
 
   // FUNCIONES DEL MODAL
@@ -90,7 +88,7 @@ export default function Directorio() {
       nombre_completo: '', generacion: '', telefono: '', numero_empleado: '',
       rol: 'Alumno', estatus: 'En proceso', empresa: '', unidad_negocio: '',
       lider: '', gerente: '', opt_asignado: '', certificacion_opt: 'No Aplica',
-      fecha_entrega_operacion: '' // Reset de fecha
+      fecha_entrega_operacion: '' 
     });
     setModalAbierto(true);
   };
@@ -104,12 +102,12 @@ export default function Directorio() {
       empresa: usuario.empresa || '', unidad_negocio: usuario.unidad_negocio || '',
       lider: usuario.lider || '', gerente: usuario.gerente || '', 
       opt_asignado: usuario.opt_asignado || '', certificacion_opt: usuario.certificacion_opt || 'No Aplica',
-      fecha_entrega_operacion: usuario.fecha_entrega_operacion ? usuario.fecha_entrega_operacion.split('T')[0] : '' // Carga de fecha desde DB limpia
+      fecha_entrega_operacion: usuario.fecha_entrega_operacion ? usuario.fecha_entrega_operacion.split('T')[0] : ''
     });
     setModalAbierto(true);
   };
 
-  // GUARDAR EXPEDIENTE DIRECTO EN SUPABASE
+  // GUARDAR EXPEDIENTE DIRECTO EN SUPABASE CON DOBLE INYECCIÓN
   const guardarExpediente = async () => {
     if (!formData.nombre_completo || !formData.telefono) {
       return alert("El nombre y el celular son obligatorios.");
@@ -117,17 +115,34 @@ export default function Directorio() {
     
     let datosAGuardar = { ...formData };
     
-    // Si la fecha está vacía, manda null para evitar errores de tipo en la BD
     if (datosAGuardar.fecha_entrega_operacion === '') {
         datosAGuardar.fecha_entrega_operacion = null;
     }
 
     try {
         if (!idEditando) {
-            // Nuevo Registro
+            // Nuevo Registro Principal
             datosAGuardar.contrasena = formData.nombre_completo.substring(0,3).toUpperCase().replace(/ /g,'X') + (formData.numero_empleado || '123');
             const { error } = await supabase.from('usuarios').insert([datosAGuardar]);
             if (error) throw error;
+
+            // 🚀 MOTOR DE DOBLE INYECCIÓN (Automatización a Catálogos)
+            // Esto bifurca el nombre del usuario a su tabla correspondiente sin interrumpir el proceso
+            try {
+              const payloadCatalogo = { nombre: datosAGuardar.nombre_completo };
+              if (datosAGuardar.rol === 'Gerente') {
+                await supabase.from('cat_gerentes').insert([payloadCatalogo]);
+              } else if (datosAGuardar.rol === 'Lider') {
+                await supabase.from('cat_lideres').insert([payloadCatalogo]);
+              } else if (datosAGuardar.rol === 'Tutor') {
+                await supabase.from('cat_tutores').insert([payloadCatalogo]);
+              } else if (datosAGuardar.rol === 'Alumno') {
+                await supabase.from('cat_alumnos').insert([payloadCatalogo]);
+              }
+            } catch (errCatalogo) {
+              console.warn("El usuario se guardó, pero hubo un detalle sincronizando el catálogo: ", errCatalogo);
+            }
+
         } else {
             // Actualizar Registro
             const { error } = await supabase.from('usuarios').update(datosAGuardar).eq('id', idEditando);
@@ -135,7 +150,7 @@ export default function Directorio() {
         }
 
         setModalAbierto(false);
-        cargarUsuarios(); // Recargar la tabla con el nuevo dato
+        cargarUsuarios(); 
     } catch (err) {
         console.error("Error al guardar:", err);
         alert("Error al guardar: " + err.message);
@@ -156,13 +171,12 @@ export default function Directorio() {
     }
   };
 
-  // KPIs Calculados dinámicamente
+  // KPIs Calculados
   const kpiActivos = usuariosFiltrados.filter(u => u.estatus === 'En proceso').length;
   const kpiLiberados = usuariosFiltrados.filter(u => u.estatus === 'Liberado').length;
   const kpiBajas = usuariosFiltrados.filter(u => u.estatus === 'Baja').length;
   const kpiIncapacidad = usuariosFiltrados.filter(u => u.estatus === 'Incapacidad').length;
 
-  // Estilos reutilizables
   const inputStyle = { width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '8px', boxSizing: 'border-box', fontSize: '14px', color: 'var(--text-light)', marginBottom: '15px' };
   const labelStyle = { display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '1px' };
 
@@ -190,7 +204,7 @@ export default function Directorio() {
         style={{ width: '100%', padding: '15px 20px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--primary)', borderRadius: '12px', color: 'white', fontSize: '15px', marginBottom: '20px', boxShadow: '0 0 15px rgba(217, 119, 6, 0.1)', boxSizing: 'border-box' }}
       />
 
-      {/* FILTROS LOCALES SIMPLIFICADOS */}
+      {/* FILTROS LOCALES */}
       <div style={{ background: 'rgba(0,0,0,0.2)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border-color)', marginBottom: '20px', display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <div style={{ flex: 1, minWidth: '140px' }}>
           <label style={labelStyle}>Filtrar Rol</label>
@@ -258,7 +272,6 @@ export default function Directorio() {
                     <td style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-color)', fontSize: '12px' }}>
                       <span style={{ color: 'var(--text-muted)' }}>Líder:</span> <b style={{ color: 'var(--info)' }}>{u.lider || <span style={{color:'var(--danger)'}}>N/A</span>}</b><br/>
                       <span style={{ color: 'var(--text-muted)' }}>OPT:</span> <b style={{ color: 'var(--purple)' }}>{u.opt_asignado || <span style={{color:'var(--danger)'}}>N/A</span>}</b>
-                      {/* INDICADOR VISUAL DEL SEGURO OPT */}
                       {u.rol === 'Alumno' && u.fecha_entrega_operacion && (
                         <>
                           <br/>
@@ -285,10 +298,10 @@ export default function Directorio() {
         </table>
       </div>
 
-      {/* MODAL ALTA / EDICIÓN DE PERSONAL */}
+      {/* MODAL ALTA / EDICIÓN DE PERSONAL (BLINDADO CON COLOR SÓLIDO Y BLUR) */}
       {modalAbierto && (
-        <div style={{ position: 'fixed', zIndex: 2000, left: 0, top: 0, width: '100%', height: '100%', backgroundColor: 'rgba(5, 11, 20, 0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' }}>
-          <div style={{ backgroundColor: 'var(--sidebar-bg)', padding: '35px', borderRadius: '20px', width: '100%', maxWidth: '600px', boxShadow: '0 0 40px rgba(0,0,0,0.8)', maxHeight: '90vh', overflowY: 'auto', border: '1px solid var(--border-color)' }}>
+        <div style={{ position: 'fixed', zIndex: 9999, left: 0, top: 0, width: '100%', height: '100%', backgroundColor: 'rgba(11, 17, 33, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' }}>
+          <div style={{ backgroundColor: '#1E293B', padding: '35px', borderRadius: '20px', width: '100%', maxWidth: '600px', boxShadow: '0 25px 50px rgba(0,0,0,0.8)', maxHeight: '90vh', overflowY: 'auto', border: '1px solid #334155' }}>
             <h2 style={{ marginTop: 0, color: 'var(--primary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '15px', marginBottom: '20px', fontSize: '24px' }}>
               {idEditando ? 'Editar Expediente de Personal' : 'Alta de Nuevo Personal'}
             </h2>
@@ -325,7 +338,6 @@ export default function Directorio() {
               <div><label style={labelStyle}>Líder Asignado</label><input type="text" name="lider" value={formData.lider} onChange={handleChangeForm} style={inputStyle} /></div>
               <div><label style={labelStyle}>Gerente Asignado</label><input type="text" name="gerente" value={formData.gerente} onChange={handleChangeForm} style={inputStyle} /></div>
 
-              {/* SECCIÓN EXPANDIDA PARA ALUMNOS: TUTOR + SEGURO CALENDARIO */}
               {formData.rol === 'Alumno' && (
                 <div style={{ gridColumn: 'span 2', background: 'rgba(139, 92, 246, 0.1)', padding: '20px', borderRadius: '12px', border: '1px dashed var(--purple)', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                   <div>
