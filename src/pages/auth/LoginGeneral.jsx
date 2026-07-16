@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { dataService } from "../../services/dataService";
+import { supabase } from "../../services/supabaseClient";
 
 export default function LoginGeneral() {
   const [email, setEmail] = useState('');
@@ -17,13 +17,36 @@ export default function LoginGeneral() {
     setCargando(true);
     setErrorMsg('');
 
-    const { exito, datos, mensaje } = await authService.loginAdmin(email, password);
+    try {
+      // 1. Buscamos al usuario en la base de datos por su correo
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('correo', email.trim().toLowerCase())
+        .single();
 
-    if (exito) {
-      localStorage.setItem('udat_app_session', JSON.stringify(datos)); // Unificado a una sola llave
-      navigate('/admin');
-    } else {
-      setErrorMsg(mensaje);
+      // 2. Si hay error o no existe, bloqueamos
+      if (error || !data) {
+        throw new Error("Credenciales inválidas o correo no registrado.");
+      }
+
+      // 3. Verificamos la contraseña
+      if (data.password !== password) {
+        throw new Error("Contraseña incorrecta. Intenta de nuevo.");
+      }
+
+      // 4. Verificamos que tenga un rol de administrador o gerencia (Opcional, pero recomendado)
+      if (data.rol === 'Alumno' || data.rol === 'Tutor') {
+         throw new Error("Acceso denegado. No tienes nivel de autorización de Mando.");
+      }
+
+      // 5. Si todo está correcto, guardamos la sesión y lo dejamos pasar
+      localStorage.setItem('udat_app_session', JSON.stringify(data));
+      navigate('/admin/dashboard'); // Aseguramos que caiga dentro de las rutas del layout
+
+    } catch (err) {
+      setErrorMsg(err.message);
+    } finally {
       setCargando(false);
     }
   };
@@ -49,6 +72,7 @@ export default function LoginGeneral() {
           placeholder="Contraseña maestra" 
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleLogin()} // Permite entrar presionando "Enter"
           style={{ width: '100%', padding: '15px', marginBottom: '25px', border: '1px solid #475569', borderRadius: '10px', boxSizing: 'border-box', fontSize: '15px', background: '#0f172a', color: '#ffffff', outline: 'none' }}
         />
         
