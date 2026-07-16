@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from "../../services/supabaseClient";
+import { authService } from "../../services/authService"; // <--- ¡ESTE ERA EL IMPORT QUE FALTABA DESDE EL INICIO!
 
 export default function LoginGeneral() {
   const [email, setEmail] = useState('');
@@ -18,39 +18,18 @@ export default function LoginGeneral() {
     setErrorMsg('');
 
     try {
-      // 1. Traemos TODOS los registros que coincidan con ese correo (sin límite)
-      const { data: usuariosEncontrados, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('correo', email.trim().toLowerCase());
+      // USAMOS EXACTAMENTE EL MISMO MOTOR QUE EN LOGIN ADMIN
+      const resultado = await authService.loginAdmin(email, password);
 
-      if (error) {
-        throw new Error("Error de conexión: " + error.message);
+      if (resultado.exito) {
+        // Guardamos la sesión y entramos
+        localStorage.setItem('udat_app_session', JSON.stringify(resultado.datos));
+        navigate('/admin/dashboard'); 
+      } else {
+        setErrorMsg(resultado.mensaje || 'Contraseña incorrecta o correo no registrado.');
       }
-
-      if (!usuariosEncontrados || usuariosEncontrados.length === 0) {
-        throw new Error("Credenciales inválidas o correo no registrado.");
-      }
-
-      // 2. Buscamos entre los duplicados cuál es el que tiene la contraseña correcta
-      const usuarioValido = usuariosEncontrados.find(u => u.password === password);
-
-      // 3. Si ninguno de los duplicados tiene esa contraseña, rebotamos
-      if (!usuarioValido) {
-        throw new Error("Contraseña incorrecta. Intenta de nuevo.");
-      }
-
-      // 4. Verificamos que ese perfil exacto tenga permisos de mando
-      if (usuarioValido.rol === 'Alumno' || usuarioValido.rol === 'Tutor') {
-         throw new Error("Acceso denegado. Este perfil no tiene autorización de Mando.");
-      }
-
-      // 5. ¡Pase VIP! Guardamos la sesión del perfil correcto y entramos
-      localStorage.setItem('udat_app_session', JSON.stringify(usuarioValido));
-      navigate('/admin/dashboard'); 
-
     } catch (err) {
-      setErrorMsg(err.message);
+      setErrorMsg('Falla de conexión con la infraestructura de autenticación.');
     } finally {
       setCargando(false);
     }
@@ -70,6 +49,7 @@ export default function LoginGeneral() {
           placeholder="Correo corporativo" 
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
           style={{ width: '100%', padding: '15px', marginBottom: '20px', border: '1px solid #475569', borderRadius: '10px', boxSizing: 'border-box', fontSize: '15px', background: '#0f172a', color: '#ffffff', outline: 'none' }}
         />
         <input 
@@ -77,6 +57,7 @@ export default function LoginGeneral() {
           placeholder="Contraseña maestra" 
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
           onKeyDown={(e) => e.key === 'Enter' && handleLogin()} 
           style={{ width: '100%', padding: '15px', marginBottom: '25px', border: '1px solid #475569', borderRadius: '10px', boxSizing: 'border-box', fontSize: '15px', background: '#0f172a', color: '#ffffff', outline: 'none' }}
         />
