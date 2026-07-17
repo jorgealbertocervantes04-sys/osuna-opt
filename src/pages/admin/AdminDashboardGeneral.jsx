@@ -5,7 +5,7 @@ export default function AdminDashboardGeneral() {
   const [alumnos, setAlumnos] = useState([]);
   const [cargando, setCargando] = useState(true);
   
-  // ESTADO PARA CONTROLAR LAS PESTAÑAS (Tabs)
+  // ESTADO PARA CONTROLAR LAS 5 PESTAÑAS (Tabs)
   const [pestanaActiva, setPestanaActiva] = useState('semaforos');
 
   const cargarDatosOperativos = async () => {
@@ -30,7 +30,7 @@ export default function AdminDashboardGeneral() {
   }, []);
 
   // ==========================================
-  // 1. CÁLCULO DE KPIs GLOBALES (Para Semáforos)
+  // 1. CÁLCULO DE KPIs GLOBALES
   // ==========================================
   const totalAlumnos = alumnos.length;
   const kpiActivos = alumnos.filter(a => a.estatus === 'En proceso').length;
@@ -54,14 +54,13 @@ export default function AdminDashboardGeneral() {
   // 2. PROCESAMIENTO DE ALERTAS Y RIESGOS DE BAJA
   // ==========================================
   const hoy = new Date();
-  
   let listaAlertas = [];
   let listaRiesgoBaja = [];
 
   alumnos.filter(a => a.estatus === 'En proceso').forEach(alumno => {
     let diasSinOPT = 0;
     let diasDesdeBanderazo = 0;
-    let nivelRiesgo = 0; // 0 = Sano, 1 = Alerta, 2 = Riesgo Crítico de Baja
+    let nivelRiesgo = 0; 
     let mensajesAlerta = [];
 
     // Fuga 1: Huérfanos de OPT
@@ -73,7 +72,7 @@ export default function AdminDashboardGeneral() {
         nivelRiesgo += 1;
         mensajesAlerta.push(`⚠️ ${diasSinOPT} días sin OPT asignado.`);
       } else if (diasSinOPT >= 7) {
-        nivelRiesgo += 2; // Sube directo a riesgo de baja
+        nivelRiesgo += 2; 
         mensajesAlerta.push(`🚨 CRÍTICO: ${diasSinOPT} días sin OPT asignado.`);
       }
     }
@@ -92,7 +91,6 @@ export default function AdminDashboardGeneral() {
       }
     }
 
-    // Clasificamos al alumno según la suma de sus riesgos
     if (nivelRiesgo === 1) {
       listaAlertas.push({ ...alumno, mensajesAlerta });
     } else if (nivelRiesgo >= 2) {
@@ -106,34 +104,46 @@ export default function AdminDashboardGeneral() {
   const cardStyle = { background: '#1e293b', borderRadius: '16px', padding: '20px', border: '1px solid #334155', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)' };
   const titleStyle = { color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '15px', marginTop: 0, fontWeight: 700 };
   
-  const btnTabBase = { padding: '12px 24px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', border: 'none', transition: 'all 0.3s ease', fontSize: '14px' };
+  const btnTabBase = { padding: '12px 18px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', border: 'none', transition: 'all 0.3s ease', fontSize: '13px', flex: '1 1 auto', textAlign: 'center' };
   const btnInactivo = { ...btnTabBase, background: 'transparent', color: '#94a3b8', border: '1px solid #334155' };
 
   return (
     <div style={{ animation: 'fadeIn 0.5s ease', color: 'white', paddingBottom: '40px' }}>
       
-      {/* ENCABEZADO Y SISTEMA DE PESTAÑAS */}
+      {/* ENCABEZADO Y SISTEMA DE 5 PESTAÑAS */}
       <div style={{ marginBottom: '30px' }}>
         <h1 style={{ margin: '0 0 10px 0', fontSize: '32px', color: '#60a5fa', fontWeight: 900 }}>Visor Estratégico General</h1>
         
-        <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginTop: '20px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '20px' }}>
           <button 
             onClick={() => setPestanaActiva('semaforos')} 
             style={pestanaActiva === 'semaforos' ? { ...btnTabBase, background: '#3b82f6', color: 'white', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)' } : btnInactivo}
           >
-            🚦 Semáforos y Distribución
+            🚦 Distribución
+          </button>
+          <button 
+            onClick={() => setPestanaActiva('asistencias')} 
+            style={pestanaActiva === 'asistencias' ? { ...btnTabBase, background: '#8b5cf6', color: 'white', boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)' } : btnInactivo}
+          >
+            📅 Asistencias
+          </button>
+          <button 
+            onClick={() => setPestanaActiva('metas')} 
+            style={pestanaActiva === 'metas' ? { ...btnTabBase, background: '#10b981', color: 'white', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)' } : btnInactivo}
+          >
+            🏆 Metas de Liberación
           </button>
           <button 
             onClick={() => setPestanaActiva('alertas')} 
             style={pestanaActiva === 'alertas' ? { ...btnTabBase, background: '#f59e0b', color: 'white', boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)' } : btnInactivo}
           >
-            ⚠️ Alertas Operativas ({listaAlertas.length})
+            ⚠️ Alertas ({listaAlertas.length})
           </button>
           <button 
             onClick={() => setPestanaActiva('riesgo')} 
             style={pestanaActiva === 'riesgo' ? { ...btnTabBase, background: '#e11d48', color: 'white', boxShadow: '0 4px 12px rgba(225, 29, 72, 0.4)' } : btnInactivo}
           >
-            🚨 Riesgo de Baja ({listaRiesgoBaja.length})
+            🚨 Riesgo Baja ({listaRiesgoBaja.length})
           </button>
         </div>
       </div>
@@ -143,47 +153,20 @@ export default function AdminDashboardGeneral() {
       ) : (
         <>
           {/* ======================================================== */}
-          {/* PESTAÑA 1: SEMÁFOROS (MÉTRICAS Y ASISTENCIA COMPACTA) */}
+          {/* PESTAÑA 1: DISTRIBUCIÓN Y SEMÁFOROS (Solo cargas de trabajo) */}
           {/* ======================================================== */}
           {pestanaActiva === 'semaforos' && (
             <div style={{ animation: 'fadeIn 0.3s ease' }}>
-              {/* CLUSTER DE KPIs */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-                <div style={{ ...cardStyle, borderLeft: '4px solid #3b82f6' }}><h3 style={titleStyle}>Histórico</h3><p style={{ margin: 0, fontSize: '32px', fontWeight: 900 }}>{totalAlumnos}</p></div>
-                <div style={{ ...cardStyle, borderLeft: '4px solid #fbbf24' }}><h3 style={titleStyle}>Activos</h3><p style={{ margin: 0, fontSize: '32px', fontWeight: 900, color: '#fbbf24' }}>{kpiActivos}</p></div>
+                <div style={{ ...cardStyle, borderLeft: '4px solid #3b82f6' }}><h3 style={titleStyle}>Histórico General</h3><p style={{ margin: 0, fontSize: '32px', fontWeight: 900 }}>{totalAlumnos}</p></div>
+                <div style={{ ...cardStyle, borderLeft: '4px solid #fbbf24' }}><h3 style={titleStyle}>Activos (Proceso)</h3><p style={{ margin: 0, fontSize: '32px', fontWeight: 900, color: '#fbbf24' }}>{kpiActivos}</p></div>
                 <div style={{ ...cardStyle, borderLeft: '4px solid #34d399' }}><h3 style={titleStyle}>Liberados</h3><p style={{ margin: 0, fontSize: '32px', fontWeight: 900, color: '#34d399' }}>{kpiLiberados}</p></div>
                 <div style={{ ...cardStyle, borderLeft: '4px solid #f87171' }}><h3 style={titleStyle}>Bajas</h3><p style={{ margin: 0, fontSize: '32px', fontWeight: 900, color: '#f87171' }}>{kpiBajas}</p></div>
               </div>
 
-              {/* MEDIDORES Y RESUMEN COMPACTO DE ASISTENCIA */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-                
-                {/* Asistencia Compacta (Mockup preparatorio para conectar DB) */}
-                <div style={{ ...cardStyle, gridColumn: '1 / -1', background: 'linear-gradient(90deg, #1e293b 0%, #0f172a 100%)' }}>
-                  <h3 style={titleStyle}>📅 Resumen Compacto de Asistencias (Últimos 7 días)</h3>
-                  <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div style={{ flex: 1, minWidth: '200px' }}>
-                      <p style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 8px 0' }}>Nivel de Cumplimiento General</p>
-                      <div style={{ background: '#0f172a', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
-                         <div style={{ background: '#10b981', height: '100%', width: `92%` }}></div>
-                      </div>
-                      <p style={{ margin: '5px 0 0 0', fontSize: '24px', fontWeight: 'bold', color: '#34d399' }}>92% <span style={{fontSize:'12px', color:'#94a3b8', fontWeight:'normal'}}>Asistencia</span></p>
-                    </div>
-                    <div style={{ flex: 1, minWidth: '200px', display: 'flex', gap: '15px' }}>
-                      <div style={{ background: 'rgba(52, 211, 153, 0.1)', padding: '10px 15px', borderRadius: '8px', border: '1px solid rgba(52, 211, 153, 0.2)' }}>
-                        <span style={{ display: 'block', fontSize: '11px', color: '#34d399' }}>PRESENTES HOY</span>
-                        <b style={{ fontSize: '18px' }}>---</b>
-                      </div>
-                      <div style={{ background: 'rgba(244, 63, 94, 0.1)', padding: '10px 15px', borderRadius: '8px', border: '1px solid rgba(244, 63, 94, 0.2)' }}>
-                        <span style={{ display: 'block', fontSize: '11px', color: '#fb7185' }}>AUSENCIAS</span>
-                        <b style={{ fontSize: '18px' }}>---</b>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
                 <div style={cardStyle}>
-                  <h3 style={titleStyle}>📊 Alumnos por Gerente</h3>
+                  <h3 style={titleStyle}>📊 Carga por Gerente</h3>
                   {alumnosPorGerente.map(([gerente, cantidad]) => (
                     <div key={gerente} style={{ marginBottom: '12px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}><span>{gerente}</span><strong style={{ color: '#60a5fa' }}>{cantidad}</strong></div>
@@ -203,7 +186,7 @@ export default function AdminDashboardGeneral() {
                 </div>
 
                 <div style={cardStyle}>
-                  <h3 style={titleStyle}>🏢 Distribución por Base</h3>
+                  <h3 style={titleStyle}>🏢 Distribución por Base (Unidad)</h3>
                   {alumnosPorUnidad.map(([unidad, cantidad]) => (
                     <div key={unidad} style={{ marginBottom: '12px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}><span>{unidad}</span><strong style={{ color: '#10b981' }}>{cantidad}</strong></div>
@@ -216,7 +199,87 @@ export default function AdminDashboardGeneral() {
           )}
 
           {/* ======================================================== */}
-          {/* PESTAÑA 2: ALERTAS OPERATIVAS (Tiempos muertos iniciales) */}
+          {/* PESTAÑA 2: ASISTENCIAS (Módulo Exclusivo) */}
+          {/* ======================================================== */}
+          {pestanaActiva === 'asistencias' && (
+            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+              <div style={{ ...cardStyle, background: 'linear-gradient(90deg, rgba(139, 92, 246, 0.1) 0%, #1e293b 100%)', border: '1px solid rgba(139, 92, 246, 0.3)', marginBottom: '20px' }}>
+                <h3 style={{ ...titleStyle, color: '#a78bfa' }}>📅 Monitor de Asistencia y Permanencia</h3>
+                <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px' }}>Vista exclusiva para evaluar la presentación física de los alumnos y tutores.</p>
+                
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <p style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 8px 0' }}>Cumplimiento Semanal (Promedio)</p>
+                    <div style={{ background: '#0f172a', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
+                       <div style={{ background: '#8b5cf6', height: '100%', width: `88%` }}></div>
+                    </div>
+                    <p style={{ margin: '5px 0 0 0', fontSize: '24px', fontWeight: 'bold', color: '#a78bfa' }}>88% <span style={{fontSize:'12px', color:'#94a3b8', fontWeight:'normal'}}>Asistencia</span></p>
+                  </div>
+                  <div style={{ flex: 1, minWidth: '200px', display: 'flex', gap: '15px' }}>
+                    <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)', width: '100%' }}>
+                      <span style={{ display: 'block', fontSize: '11px', color: '#34d399' }}>PRESENTES HOY</span>
+                      <b style={{ fontSize: '22px' }}>--</b>
+                    </div>
+                    <div style={{ background: 'rgba(244, 63, 94, 0.1)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(244, 63, 94, 0.2)', width: '100%' }}>
+                      <span style={{ display: 'block', fontSize: '11px', color: '#fb7185' }}>FALTAS HOY</span>
+                      <b style={{ fontSize: '22px' }}>--</b>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Tabla de registros (Lista para conectarse a tu futura tabla de asistencias) */}
+              <div style={cardStyle}>
+                <h3 style={titleStyle}>📋 Bitácora de Registro Reciente</h3>
+                <div style={{ background: '#0f172a', padding: '30px', textAlign: 'center', borderRadius: '10px', color: '#64748b', border: '1px dashed #334155' }}>
+                  El motor de telemetría de asistencias está en preparación. Aquí se reflejará el pase de lista en tiempo real.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* PESTAÑA 3: METAS DE LIBERACIÓN (Rendimiento) */}
+          {/* ======================================================== */}
+          {pestanaActiva === 'metas' && (
+            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+              <div style={{ ...cardStyle, background: 'linear-gradient(90deg, rgba(16, 185, 129, 0.1) 0%, #1e293b 100%)', border: '1px solid rgba(16, 185, 129, 0.3)', marginBottom: '20px' }}>
+                <h3 style={{ ...titleStyle, color: '#34d399' }}>🏆 Avance de Metas de Liberación</h3>
+                <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px' }}>Monitorea cuántos alumnos logran culminar su proceso y asegurar su estancia en la empresa.</p>
+                
+                <div style={{ background: '#0f172a', padding: '20px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px' }}>
+                  <div>
+                    <h4 style={{ margin: 0, color: 'white', fontSize: '18px' }}>Tasa de Retención y Éxito</h4>
+                    <p style={{ margin: '5px 0 0 0', color: '#94a3b8', fontSize: '13px' }}>Alumnos liberados vs Total de alumnos (sin contar activos)</p>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    {/* Fórmula simple para sacar porcentaje de éxito de los que ya no están en proceso */}
+                    <span style={{ fontSize: '36px', fontWeight: 900, color: '#10b981' }}>
+                      {((kpiLiberados / (kpiLiberados + kpiBajas || 1)) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                <div style={cardStyle}>
+                  <h3 style={titleStyle}>📈 Liberados vs Bajas (Por Base)</h3>
+                  <div style={{ background: '#0f172a', padding: '40px', textAlign: 'center', borderRadius: '10px', color: '#64748b', border: '1px dashed #334155' }}>
+                    Módulo de gráficas comparativas en calibración.
+                  </div>
+                </div>
+                <div style={cardStyle}>
+                  <h3 style={titleStyle}>⏱️ Tiempo Promedio de Liberación</h3>
+                   <div style={{ background: '#0f172a', padding: '40px', textAlign: 'center', borderRadius: '10px', color: '#64748b', border: '1px dashed #334155' }}>
+                    Calculadora de días en proceso (Banderazo - Liberación) en calibración.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* PESTAÑA 4: ALERTAS OPERATIVAS */}
           {/* ======================================================== */}
           {pestanaActiva === 'alertas' && (
             <div style={{ animation: 'fadeIn 0.3s ease', ...cardStyle, border: '1px solid rgba(245, 158, 11, 0.3)', background: 'linear-gradient(180deg, #1e293b 0%, rgba(245, 158, 11, 0.05) 100%)' }}>
@@ -246,12 +309,12 @@ export default function AdminDashboardGeneral() {
           )}
 
           {/* ======================================================== */}
-          {/* PESTAÑA 3: RIESGO DE BAJA (El detector predictivo) */}
+          {/* PESTAÑA 5: RIESGO DE BAJA */}
           {/* ======================================================== */}
           {pestanaActiva === 'riesgo' && (
             <div style={{ animation: 'fadeIn 0.3s ease', ...cardStyle, border: '1px solid rgba(225, 29, 72, 0.3)', background: 'linear-gradient(180deg, #1e293b 0%, rgba(225, 29, 72, 0.05) 100%)' }}>
-              <h3 style={{ ...titleStyle, color: '#fb7185' }}>🚨 Focos Rojos: Posibles Bajas</h3>
-              <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px' }}>Alumnos con inactividad crítica o abandono prolongado. Alta probabilidad de deserción de la empresa.</p>
+              <h3 style={{ ...titleStyle, color: '#fb7185' }}>🚨 Focos Rojos: Riesgo Inminente de Baja</h3>
+              <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px' }}>Alumnos con inactividad crítica o abandono prolongado. Alta probabilidad de deserción.</p>
               
               {listaRiesgoBaja.length === 0 ? (
                 <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '20px', borderRadius: '8px', textAlign: 'center', color: '#34d399', border: '1px dashed #34d399' }}>✅ Sistema estable. No hay alumnos detectados con riesgo inminente de baja.</div>
