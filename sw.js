@@ -1,12 +1,17 @@
-// Este Service Worker escucha las notificaciones Push enviadas desde tu servidor
+// sw.js - Service Worker para notificaciones push
 self.addEventListener('push', function(event) {
-  const data = event.data ? event.data.json() : {};
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    console.warn('Push event data no es JSON válido:', e);
+  }
 
   const title = data.title || "LARMEX - Academia OPT";
   const options = {
     body: data.body || "¡No olvides registrar tu bitácora de inducción de hoy!",
-    icon: '/icono-larmex.png', // Asegúrate de tener un icono en tu carpeta public
-    badge: '/icono-larmex.png',
+    icon: '/osuna-opt/icono-larmex.png',   // Ruta con base del proyecto
+    badge: '/osuna-opt/icono-larmex.png',
     vibrate: [200, 100, 200]
   };
 
@@ -15,10 +20,9 @@ self.addEventListener('push', function(event) {
   );
 });
 
-// Cuando el alumno toca la notificación, lo llevamos a la app
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   event.waitUntil(
-    clients.openWindow('/')
+    clients.openWindow('/osuna-opt/')      // Redirige a la base de la app
   );
 });
