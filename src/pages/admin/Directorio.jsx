@@ -91,7 +91,7 @@ export default function Directorio() {
     setFormData({
       nombre_completo: '', generacion: '', telefono: '', numero_empleado: '',
       rol: 'Alumno', estatus: 'En proceso', empresa: '', unidad_negocio: '',
-      lider: '', gerente: '', opt_asignado: '', certificacion_opt: 'No Aplica',
+      lider: '', cat_gerente: '', opt_asignado: '', certificacion_opt: 'No Aplica',
       fecha_entrega_operacion: '' 
     });
     setModalAbierto(true);
@@ -104,7 +104,7 @@ export default function Directorio() {
       telefono: usuario.telefono || '', numero_empleado: usuario.numero_empleado || '',
       rol: usuario.rol || 'Alumno', estatus: usuario.estatus || 'En proceso', 
       empresa: usuario.empresa || '', unidad_negocio: usuario.unidad_negocio || '',
-      lider: usuario.lider || '', gerente: usuario.gerente || '', 
+      lider: usuario.lider || '', cat_gerente: usuario.cat_gerente || '', 
       opt_asignado: usuario.opt_asignado || '', certificacion_opt: usuario.certificacion_opt || 'No Aplica',
       fecha_entrega_operacion: usuario.fecha_entrega_operacion ? usuario.fecha_entrega_operacion.split('T')[0] : ''
     });

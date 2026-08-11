@@ -54,7 +54,7 @@ export default function AdminLayout() {
           setOpcionesGen(extraerUnicos('generacion'));
           setOpcionesUni(extraerUnicos('unidad_negocio'));
           setOpcionesLid(extraerUnicos('lider'));
-          setOpcionesGer(extraerUnicos('gerente'));
+          setOpcionesGer(extraerUnicos('cat_gerente'));
         }
       } catch (err) {
         console.error("Error cargando filtros estructurales:", err.message);

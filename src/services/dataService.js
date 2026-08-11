@@ -1,26 +1,47 @@
+// dataService.js
 import { supabase } from './supabaseClient';
 
 export const dataService = {
   // ==========================================
-  // 1. OBTENER USUARIOS POR ROL
+  // USUARIOS
   // ==========================================
-  async obtenerUsuariosPorRol(rol) {
+  async obtenerUsuarios(filtros = {}, page = null, limit = 50) {
     try {
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('rol', rol)
-        .order('nombre_completo', { ascending: true });
+      let query = supabase.from('usuarios').select('*', { count: 'exact' });
+      if (filtros.rol) query = query.eq('rol', filtros.rol);
+      // ordenar por nombre
+      query = query.order('nombre_completo', { ascending: true });
+      // paginación opcional
+      if (page && Number.isInteger(page) && page > 0) {
+        const offset = (page - 1) * limit;
+        query = query.range(offset, offset + limit - 1);
+      }
+      const { data, error, count } = await query;
       if (error) throw error;
-      return data || [];
+      return { data: data || [], total: count ?? (data ? data.length : 0) };
     } catch (error) {
-      console.error(`Error obteniendo usuarios con rol ${rol}:`, error.message);
-      return [];
+      console.error("Error en obtenerUsuarios:", error.message);
+      return { data: [], total: 0 };
+    }
+  },
+
+  async guardarUsuario(datos, id = null) {
+    try {
+      if (id) {
+        const { error } = await supabase.from('usuarios').update(datos).eq('id', id);
+        return { exito: !error, error };
+      } else {
+        const { error } = await supabase.from('usuarios').insert([datos]);
+        return { exito: !error, error };
+      }
+    } catch (error) {
+      console.error("Error en guardarUsuario:", error.message);
+      return { exito: false, error: error.message };
     }
   },
 
   // ==========================================
-  // 2. REGISTRAR UN NUEVO VIAJE (OPT)
+  // VIAJES
   // ==========================================
   async registrarViaje(datosViaje) {
     try {
@@ -36,8 +57,27 @@ export const dataService = {
     }
   },
 
+  async obtenerViajes(filtros = {}) {
+    try {
+      let query = supabase.from('viajes_diarios').select('*');
+      if (filtros.desde) query = query.gte('hora_inicio', filtros.desde);
+      if (filtros.hasta) query = query.lte('hora_inicio', filtros.hasta);
+      if (filtros.id_alumno) query = query.eq('id_alumno', filtros.id_alumno);
+      const { data, error } = await query.order('hora_inicio', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error en obtenerViajes:", error.message);
+      return [];
+    }
+  },
+
+  async obtenerViajesPorAlumno(id_alumno) {
+    return this.obtenerViajes({ id_alumno });
+  },
+
   // ==========================================
-  // 3. OBTENER Y REGISTRAR AVANCES DE INDUCCIÓN
+  // INDUCCIÓN
   // ==========================================
   async obtenerAvanceInduccion(id_alumno) {
     try {
@@ -69,66 +109,21 @@ export const dataService = {
   },
 
   // ==========================================
-  // 4. OBTENER HISTORIAL DE VIAJES (Filtros Generales)
-  // ==========================================
-  async obtenerViajes(filtros = {}) {
-    try {
-      let query = supabase.from('viajes_diarios').select('*');
-
-      if (filtros.desde) query = query.gte('hora_inicio', filtros.desde);
-      if (filtros.hasta) query = query.lte('hora_inicio', filtros.hasta);
-      if (filtros.id_operador) query = query.eq('id_operador', filtros.id_operador);
-
-      // Paginación de seguridad para evitar Error 500
-      if (!filtros.desde && !filtros.hasta && !filtros.sinLimite) {
-        query = query.range(0, 49); 
-      }
-
-      const { data, error } = await query.order('hora_inicio', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error("Error en obtenerViajes:", error.message);
-      return [];
-    }
-  },
-
-  // ==========================================
-  // 4.1. OBTENER VIAJES ESPECÍFICOS POR ALUMNO
-  // ==========================================
-  async obtenerViajesPorAlumno(id_alumno) {
-    try {
-      const { data, error } = await supabase
-        .from('viajes_diarios')
-        .select('*')
-        .eq('id_alumno', id_alumno)
-        .order('hora_inicio', { ascending: false });
-        
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error("Error obteniendo viajes del alumno:", error.message);
-      return [];
-    }
-  },
-
-  // ==========================================
-  // 5. OBTENER CATÁLOGOS (Menús desplegables)
+  // CATÁLOGOS (nombres en minúscula)
   // ==========================================
   async obtenerCatalogos() {
     try {
       const [resUni, resLid, resGer, resTut] = await Promise.all([
         supabase.from('cat_unidades').select('nombre'),
         supabase.from('cat_lideres').select('nombre'),
-        supabase.from('cat_Gerentes').select('nombre'), 
-        supabase.from('cat_tutores').select('nombre') 
+        supabase.from('cat_gerentes').select('nombre'),   // 🔥 minúscula
+        supabase.from('cat_tutores').select('nombre')
       ]);
-
       return {
         unidades: resUni.data || [],
         lideres: resLid.data || [],
         gerentes: resGer.data || [],
-        tutores: resTut.data || [] 
+        tutores: resTut.data || []
       };
     } catch (error) {
       console.error("Error cargando catálogos:", error);
@@ -137,55 +132,81 @@ export const dataService = {
   },
 
   // ==========================================
-  // 6. GESTIÓN GENERAL DE USUARIOS
-  // ==========================================
-  async obtenerUsuarios(filtros = {}) {
-    try {
-      let query = supabase.from('usuarios').select('*');
-      if (filtros.rol) query = query.eq('rol', filtros.rol);
-      
-      const { data, error } = await query.order('nombre_completo', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error("Error en obtenerUsuarios:", error.message);
-      return [];
-    }
-  },
-
-  async guardarUsuario(datos, id = null) {
-    try {
-      if (id) {
-        const { error } = await supabase.from('usuarios').update(datos).eq('id', id);
-        return { exito: !error, error };
-      } else {
-        const { error } = await supabase.from('usuarios').insert([datos]);
-        return { exito: !error, error };
-      }
-    } catch (error) {
-      console.error("Error en guardarUsuario:", error.message);
-      return { exito: false, error: error.message };
-    }
-  },
-
-  // ==========================================
-  // 7. OBTENER MATERIAL DE ESTUDIO
+  // MATERIAL DE ESTUDIO
   // ==========================================
   async obtenerMaterialEstudio() {
     try {
       const { data, error } = await supabase
         .from('material_estudio')
-        .select('*');
+        .select('*')
+        .order('semana_asignada', { ascending: true });
       if (error) throw error;
       return data || [];
     } catch (error) {
       console.error("Error en obtenerMaterialEstudio:", error.message);
-      return []; 
+      return [];
     }
   },
 
   // ==========================================
-  // 8. OBTENER ASISTENCIAS
+  // EXÁMENES
+  // ==========================================
+  async obtenerExamenes() {
+    try {
+      const { data, error } = await supabase
+        .from('examenes')
+        .select('*')
+        .order('fecha_realizacion', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error en obtenerExamenes:", error.message);
+      return [];
+    }
+  },
+
+  async guardarExamen(datosExamen) {
+    try {
+      const { data, error } = await supabase
+        .from('examenes')
+        .insert([datosExamen])
+        .select();
+      if (error) throw error;
+      return { exito: true, data };
+    } catch (error) {
+      console.error("Error en guardarExamen:", error.message);
+      return { exito: false, error: error.message };
+    }
+  },
+
+  async actualizarExamen(id, datos) {
+    try {
+      const { error } = await supabase
+        .from('examenes')
+        .update(datos)
+        .eq('id', id);
+      return { exito: !error, error };
+    } catch (error) {
+      console.error("Error en actualizarExamen:", error.message);
+      return { exito: false, error: error.message };
+    }
+  },
+
+  async eliminarExamen(id) {
+    try {
+      const { error } = await supabase
+        .from('examenes')
+        .delete()
+        .eq('id', id);
+      return { exito: !error, error };
+    } catch (error) {
+      console.error("Error en eliminarExamen:", error.message);
+      return { exito: false, error: error.message };
+    }
+  },
+
+  // ==========================================
+  // ASISTENCIAS
   // ==========================================
   async obtenerAsistencias() {
     try {
@@ -203,13 +224,14 @@ export const dataService = {
   },
 
   // ==========================================
-  // 9. OBTENER ENCUESTAS 
+  // ENCUESTAS
   // ==========================================
   async obtenerEncuestas() {
     try {
       const { data, error } = await supabase
         .from('encuestas')
-        .select('*');
+        .select('*')
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data || [];
     } catch (error) {
@@ -219,37 +241,59 @@ export const dataService = {
   },
 
   // ==========================================
-  // 10. OBTENER EVALUACIONES (Arreglo del error 404)
+  // EVALUACIONES (Cardex)
   // ==========================================
   async obtenerEvaluaciones() {
     try {
-      // 🔥 Leemos de "encuestas" en lugar de "evaluaciones" para evitar el 404
       const { data, error } = await supabase
-        .from('encuestas')
-        .select('*');
+        .from('evaluaciones_cardex')
+        .select('*')
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data || [];
     } catch (error) {
       console.error("Error obteniendo evaluaciones:", error.message);
-      return []; // 🔥 Evita que la pantalla crashee con "e.filter is not a function"
+      return [];
     }
-  }, 
-  // ==========================================
-  // 11. GUARDAR RÚBRICA DE EVALUACIÓN (TUTOR)
-  // ==========================================
+  },
+
   async guardarEvaluacion(payload) {
     try {
       const { data, error } = await supabase
-        // NOTA: Vi en tus fotos que tu tabla se llama 'evaluaciones_cardex'. Si se llama distinto, cámbialo aquí.
-        .from('evaluaciones_cardex') 
+        .from('evaluaciones_cardex')
         .insert([payload])
         .select();
-        
       if (error) throw error;
       return { exito: true, data };
     } catch (error) {
       console.error("Error al guardar la rúbrica del tutor:", error.message);
       return { exito: false, error: error };
+    }
+  },
+
+  async actualizarEvaluacion(id, payload) {
+    try {
+      const { error } = await supabase
+        .from('evaluaciones_cardex')
+        .update(payload)
+        .eq('id', id);
+      return { exito: !error, error };
+    } catch (error) {
+      console.error("Error al actualizar evaluación:", error.message);
+      return { exito: false, error: error.message };
+    }
+  },
+
+  async eliminarEvaluacion(id) {
+    try {
+      const { error } = await supabase
+        .from('evaluaciones_cardex')
+        .delete()
+        .eq('id', id);
+      return { exito: !error, error };
+    } catch (error) {
+      console.error("Error al eliminar evaluación:", error.message);
+      return { exito: false, error: error.message };
     }
   }
 };

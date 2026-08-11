@@ -1,11 +1,22 @@
 // supabase/functions/analizar-riesgo/index.ts
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// Use a newer std version to ensure the module is available and types resolve
+// Use a std version known to be widely available for type resolution
+// Use a recent std version that provides the http server for Deno
+// Use a std version that resolves in typical environments; pin to a widely-available release
+import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
+// Use a Deno-compatible CDN build for Supabase client
+// Use a concrete, published version compatible with Deno to avoid resolution errors
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.34.0?target=deno&no-check";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+const denoEnv = (globalThis as any).Deno?.env;
+const OPENAI_API_KEY = denoEnv?.get("OPENAI_API_KEY") ?? "";
+const SUPABASE_URL = denoEnv?.get("SUPABASE_URL") ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = denoEnv?.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 serve(async (req) => {
   // Manejo de pre-flight request para CORS
@@ -19,7 +30,7 @@ serve(async (req) => {
   const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${Deno.env.get("OPENAI_API_KEY")}`,
+      "Authorization": `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -40,8 +51,8 @@ serve(async (req) => {
 
   // 2. Actualizar la base de datos con el resultado de la IA
   const supabase = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY
   );
 
   const { error } = await supabase

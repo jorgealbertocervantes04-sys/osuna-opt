@@ -1,3 +1,6 @@
 {
-    "liveServer.settings.port": 5501
+  "deno.enable": true,
+  "deno.unstable": true,
+  "deno.importMap": "./supabase/functions/analizar-riesgo/deno.json",
+  "deno.lint": true
 }
