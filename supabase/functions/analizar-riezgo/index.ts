@@ -3,7 +3,7 @@
 // Use a std version known to be widely available for type resolution
 // Use a recent std version that provides the http server for Deno
 // Use a std version that resolves in typical environments; pin to a widely-available release
-import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 // Use a Deno-compatible CDN build for Supabase client
 // Use a concrete, published version compatible with Deno to avoid resolution errors
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.34.0?target=deno&no-check";
@@ -18,7 +18,7 @@ const OPENAI_API_KEY = denoEnv?.get("OPENAI_API_KEY") ?? "";
 const SUPABASE_URL = denoEnv?.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = denoEnv?.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Manejo de pre-flight request para CORS
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });

@@ -81,20 +81,23 @@ export default function LoginApp() {
     setCargando(false);
   };
 
-  const ingresarApp = () => {
-    if (!password) return setErrorMsg("Ingresa tu contraseña.");
-    if (password === usuarioActual.contrasena) {
-      // ✅ Ahora sí guardamos la sesión al final del login
-      localStorage.setItem('udat_app_session', JSON.stringify(usuarioActual));
-      if (usuarioActual.rol === 'Tutor') {
-        navigate('/app/tutor');
-      } else {
-        navigate('/app/alumno');
-      }
+  const ingresarApp = async () => {
+  if (!password) return setErrorMsg("Ingresa tu contraseña.");
+  setCargando(true);
+  const { exito, datos, mensaje } = await authService.loginPorCelular(telefono, password);
+  setCargando(false);
+
+  if (exito) {
+    // La sesión ya se guarda dentro de loginPorCelular
+    if (datos.rol === 'Tutor') {
+      navigate('/app/tutor');
     } else {
-      setErrorMsg('Contraseña incorrecta.');
+      navigate('/app/alumno');
     }
-  };
+  } else {
+    setErrorMsg(mensaje || 'Contraseña incorrecta.');
+  }
+};
 
   // Estilos (se mantienen igual)
   const inputStyle = { width: '100%', padding: '14px', marginBottom: '20px', borderRadius: '10px', border: '1px solid #475569', background: '#0f172a', color: '#ffffff', textAlign: 'center', fontSize: '16px', boxSizing: 'border-box', outline: 'none' };

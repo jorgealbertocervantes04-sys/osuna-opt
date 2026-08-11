@@ -24,7 +24,7 @@ export default function Directorio() {
   const [formData, setFormData] = useState({
     nombre_completo: '', generacion: '', telefono: '', numero_empleado: '',
     rol: 'Alumno', estatus: 'En proceso', empresa: '', unidad_negocio: '',
-    lider: '', gerente: '', opt_asignado: '', certificacion_opt: 'No Aplica',
+    lider: '', cat_gerente: '', opt_asignado: '', certificacion_opt: 'No Aplica',
     fecha_entrega_operacion: '' 
   });
 

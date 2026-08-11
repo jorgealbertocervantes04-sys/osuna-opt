@@ -46,7 +46,7 @@ export default function AdminDashboardGeneral() {
     return Object.entries(conteo).sort((a, b) => b[1] - a[1]);
   };
 
-  const alumnosPorGerente = agruparDatos('gerente');
+  const alumnosPorGerente = agruparDatos('cat_gerente');
   const alumnosPorLider = agruparDatos('lider');
   const alumnosPorUnidad = agruparDatos('unidad_negocio');
 
