@@ -1,4 +1,3 @@
-// authService.js
 import { supabase } from './supabaseClient';
 
 export const authService = {
@@ -68,6 +67,53 @@ export const authService = {
     } catch (error) {
       console.error("Error al verificar celular:", error.message);
       return { exito: false, mensaje: "Error de conexión con la base de datos." };
+    }
+  },
+
+  // ==========================================
+  // LOGIN POR CELULAR Y CLAVE DE SEGURIDAD (Nuevo)
+  // ==========================================
+  async loginPorCelular(numeroCelular, claveSeguridad) {
+    try {
+      const celularLimpio = String(numeroCelular).trim();
+      let { data: usuario, error } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('celular', celularLimpio)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      // Buscar con prefijo si no se encontró en el primer intento
+      if (!usuario) {
+        const intentoConPrefijo = `52${celularLimpio}`;
+        const { data: dataPrefijo, error: errorPrefijo } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('celular', intentoConPrefijo)
+          .maybeSingle();
+        
+        if (errorPrefijo) throw errorPrefijo;
+        usuario = dataPrefijo;
+      }
+
+      // Si el usuario no existe
+      if (!usuario) {
+        return { exito: false, mensaje: "Usuario no encontrado." };
+      }
+
+      // Validar la clave de seguridad (Nota: Cambia 'clave_seguridad' si tu columna tiene otro nombre, por ejemplo 'password')
+      if (String(usuario.clave_seguridad) !== String(claveSeguridad)) {
+        return { exito: false, mensaje: "La clave de seguridad es incorrecta." };
+      }
+
+      // Todo es correcto: Guardamos la sesión
+      localStorage.setItem('udat_app_session', JSON.stringify(usuario));
+      return { exito: true, datos: usuario };
+
+    } catch (error) {
+      console.error("Error en loginPorCelular:", error.message);
+      return { exito: false, mensaje: "Error al intentar iniciar sesión." };
     }
   },
 
