@@ -1,17 +1,14 @@
-// dataService.js
 import { supabase } from './supabaseClient';
 
 export const dataService = {
   // ==========================================
-  // USUARIOS
+  // USUARIOS (panel Admin — usa sesión real de Supabase Auth, sin cambios)
   // ==========================================
   async obtenerUsuarios(filtros = {}, page = null, limit = 50) {
     try {
       let query = supabase.from('usuarios').select('*', { count: 'exact' });
       if (filtros.rol) query = query.eq('rol', filtros.rol);
-      // ordenar por nombre
       query = query.order('nombre_completo', { ascending: true });
-      // paginación opcional
       if (page && Number.isInteger(page) && page > 0) {
         const offset = (page - 1) * limit;
         query = query.range(offset, offset + limit - 1);
@@ -41,22 +38,39 @@ export const dataService = {
   },
 
   // ==========================================
-  // VIAJES
+  // VIAJES (alumno/operador → RPC; admin sigue leyendo la tabla directo)
   // ==========================================
   async registrarViaje(datosViaje) {
     try {
-      const { data, error } = await supabase
-        .from('viajes_diarios')
-        .insert([datosViaje])
-        .select();
+      const { data, error } = await supabase.rpc('registrar_viaje', {
+        p_id_alumno: datosViaje.id_alumno,
+        p_id_operador: datosViaje.id_operador ?? null,
+        p_km_recorridos: datosViaje.km_recorridos,
+        p_tiempo_total_minutos: datosViaje.tiempo_total_minutos,
+        p_hora_inicio: datosViaje.hora_inicio,
+        p_fecha: datosViaje.fecha,
+        p_hora_inicio_manual: datosViaje.hora_inicio_manual ?? null,
+        p_hora_fin_manual: datosViaje.hora_fin_manual ?? null,
+        p_hora_fin: datosViaje.hora_fin ?? null,
+        p_notas_novedad: datosViaje.notas_novedad ?? null,
+        p_nombre_opt: datosViaje.nombre_opt ?? null,
+        p_km_iniciales: datosViaje.km_iniciales,
+        p_km_finales: datosViaje.km_finales,
+        p_opt_calif_trato: datosViaje.opt_calif_trato ?? null,
+        p_opt_calif_instruccion: datosViaje.opt_calif_instruccion ?? null,
+        p_foto_odometro_url: datosViaje.foto_odometro_url ?? null,
+        p_foto_inicio_url: datosViaje.foto_inicio_url ?? null,
+      });
       if (error) throw error;
-      return { exito: true, data };
+      if (!data.exito) return { exito: false, error: data.mensaje };
+      return { exito: true, data: [data.datos] };
     } catch (error) {
       console.error("Error al registrar viaje:", error.message);
       return { exito: false, error: error.message };
     }
   },
 
+  // Para el panel Admin: sigue leyendo la tabla directo (ya tiene política propia)
   async obtenerViajes(filtros = {}) {
     try {
       let query = supabase.from('viajes_diarios').select('*');
@@ -72,20 +86,30 @@ export const dataService = {
     }
   },
 
-  async obtenerViajesPorAlumno(id_alumno) {
-    return this.obtenerViajes({ id_alumno });
+  // Para la vista Alumno: vía RPC (sin sesión real de Supabase Auth)
+  async obtenerViajesPorAlumno(id_alumno, desde = null, hasta = null) {
+    try {
+      const { data, error } = await supabase.rpc('obtener_viajes_alumno', {
+        p_id_alumno: id_alumno,
+        p_desde: desde,
+        p_hasta: hasta,
+      });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error en obtenerViajesPorAlumno:", error.message);
+      return [];
+    }
   },
 
   // ==========================================
-  // INDUCCIÓN
+  // INDUCCIÓN (vía RPC)
   // ==========================================
   async obtenerAvanceInduccion(id_alumno) {
     try {
-      const { data, error } = await supabase
-        .from('registros_induccion')
-        .select('*')
-        .eq('id_alumno', id_alumno)
-        .order('fecha_registro', { ascending: false });
+      const { data, error } = await supabase.rpc('obtener_induccion_alumno', {
+        p_id_alumno: id_alumno,
+      });
       if (error) throw error;
       return data || [];
     } catch (error) {
@@ -96,12 +120,15 @@ export const dataService = {
 
   async registrarAvanceInduccion(datosInduccion) {
     try {
-      const { data, error } = await supabase
-        .from('registros_induccion')
-        .insert([datosInduccion])
-        .select();
+      const { data, error } = await supabase.rpc('registrar_induccion', {
+        p_id_alumno: datosInduccion.id_alumno,
+        p_detalles: datosInduccion.detalles ?? null,
+        p_duracion_minutos: datosInduccion.duracion_minutos ?? null,
+        p_tema_visto: datosInduccion.tema_visto ?? null,
+      });
       if (error) throw error;
-      return { exito: true, data };
+      if (!data.exito) return { exito: false, error: data.mensaje };
+      return { exito: true, data: [data.datos] };
     } catch (error) {
       console.error("Error al registrar inducción:", error.message);
       return { exito: false, error: error.message };
@@ -109,14 +136,85 @@ export const dataService = {
   },
 
   // ==========================================
-  // CATÁLOGOS (nombres en minúscula)
+  // PROGRESO SEMANAL (evaluación del tutor — vía RPC)
+  // ==========================================
+  async registrarProgresoSemanal(datos) {
+    try {
+      const { data, error } = await supabase.rpc('registrar_progreso_semanal', {
+        p_id_alumno: datos.id_alumno,
+        p_semana: datos.semana,
+        p_calificacion_examen: datos.calificacion_examen ?? null,
+        p_evaluacion_tutor: datos.evaluacion_tutor ?? null,
+      });
+      if (error) throw error;
+      if (!data.exito) return { exito: false, error: data.mensaje };
+      return { exito: true, data: [data.datos] };
+    } catch (error) {
+      console.error("Error al registrar progreso semanal:", error.message);
+      return { exito: false, error: error.message };
+    }
+  },
+
+  async obtenerProgresoAlumno(id_alumno) {
+    try {
+      const { data, error } = await supabase.rpc('obtener_progreso_alumno', {
+        p_id_alumno: id_alumno,
+      });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error al obtener progreso del alumno:", error.message);
+      return [];
+    }
+  },
+
+  // ==========================================
+  // ASISTENCIAS (checkin — vía RPC; lectura solo Admin)
+  // ==========================================
+  async registrarAsistencia(datos) {
+    try {
+      const { data, error } = await supabase.rpc('registrar_asistencia', {
+        p_id_usuario: datos.id_usuario,
+        p_ubicacion: datos.ubicacion ?? null,
+        p_actividad_sin_manejo: datos.actividad_sin_manejo ?? null,
+        p_latitud: datos.latitud ?? null,
+        p_longitud: datos.longitud ?? null,
+        p_ubicacion_texto: datos.ubicacion_texto ?? null,
+      });
+      if (error) throw error;
+      if (!data.exito) return { exito: false, error: data.mensaje };
+      return { exito: true, data: [data.datos] };
+    } catch (error) {
+      console.error("Error al registrar asistencia:", error.message);
+      return { exito: false, error: error.message };
+    }
+  },
+
+  async obtenerAsistencias() {
+    try {
+      const { data, error } = await supabase
+        .from('asistencias')
+        .select('*')
+        .order('fecha_hora', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error obteniendo asistencias:", error.message);
+      return [];
+    }
+  },
+
+  // ==========================================
+  // CATÁLOGOS (sin cambios; si el dropdown de Gerentes sale vacío,
+  // revisar el nombre real de la tabla: puede ser 'cat_Gerentes' con mayúscula)
   // ==========================================
   async obtenerCatalogos() {
     try {
       const [resUni, resLid, resGer, resTut] = await Promise.all([
         supabase.from('cat_unidades').select('nombre'),
         supabase.from('cat_lideres').select('nombre'),
-        supabase.from('cat_gerentes').select('nombre'),   // 🔥 minúscula
+        supabase.from('cat_gerentes').select('nombre'),
         supabase.from('cat_tutores').select('nombre')
       ]);
       return {
@@ -132,7 +230,7 @@ export const dataService = {
   },
 
   // ==========================================
-  // MATERIAL DE ESTUDIO
+  // MATERIAL DE ESTUDIO (lectura abierta, sin cambios)
   // ==========================================
   async obtenerMaterialEstudio() {
     try {
@@ -149,7 +247,7 @@ export const dataService = {
   },
 
   // ==========================================
-  // EXÁMENES
+  // EXÁMENES (lectura abierta / escritura Admin, sin cambios)
   // ==========================================
   async obtenerExamenes() {
     try {
@@ -206,30 +304,12 @@ export const dataService = {
   },
 
   // ==========================================
-  // ASISTENCIAS
-  // ==========================================
-  async obtenerAsistencias() {
-    try {
-      const { data, error } = await supabase
-        .from('asistencias')
-        .select('*')
-        .order('fecha_hora', { ascending: false })
-        .limit(100);
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error("Error obteniendo asistencias:", error.message);
-      return [];
-    }
-  },
-
-  // ==========================================
-  // ENCUESTAS
+  // ENCUESTAS DE SATISFACCIÓN (insertar sigue abierto; leer ahora solo Admin)
   // ==========================================
   async obtenerEncuestas() {
     try {
       const { data, error } = await supabase
-        .from('encuestas')
+        .from('encuestas_satisfaccion')
         .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -240,8 +320,22 @@ export const dataService = {
     }
   },
 
+  async guardarEncuesta(datosEncuesta) {
+    try {
+      const { data, error } = await supabase
+        .from('encuestas_satisfaccion')
+        .insert([datosEncuesta])
+        .select();
+      if (error) throw error;
+      return { exito: true, data };
+    } catch (error) {
+      console.error("Error al guardar encuesta:", error.message);
+      return { exito: false, error: error.message };
+    }
+  },
+
   // ==========================================
-  // EVALUACIONES (Cardex)
+  // EVALUACIONES (Cardex) — Admin, sin cambios
   // ==========================================
   async obtenerEvaluaciones() {
     try {
