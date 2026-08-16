@@ -1,8 +1,9 @@
+// authService.js
 import { supabase } from './supabaseClient';
 
 export const authService = {
   // ==========================================
-  // LOGIN ADMIN / DIRECTIVOS
+  // LOGIN ADMIN / DIRECTIVOS (ya seguro, sin cambios)
   // ==========================================
   async loginAdmin(email, password) {
     try {
@@ -34,33 +35,28 @@ export const authService = {
   },
 
   // ==========================================
-  // VERIFICAR CELULAR (sin guardar sesión)
+  // VERIFICAR CELULAR (ahora vía RPC, sin exponer la tabla completa)
   // ==========================================
   async verificarCelular(numeroCelular) {
     try {
       const celularLimpio = String(numeroCelular).trim();
-      let { data, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('celular', celularLimpio)
-        .maybeSingle();
 
+      let { data, error } = await supabase.rpc('verificar_celular', {
+        p_celular: celularLimpio,
+      });
       if (error) throw error;
 
-      if (!data) {
+      if (!data.exito) {
         const intentoConPrefijo = `52${celularLimpio}`;
-        const { data: dataPrefijo, error: errorPrefijo } = await supabase
-          .from('usuarios')
-          .select('*')
-          .eq('celular', intentoConPrefijo)
-          .maybeSingle();
+        const { data: dataPrefijo, error: errorPrefijo } = await supabase.rpc('verificar_celular', {
+          p_celular: intentoConPrefijo,
+        });
         if (errorPrefijo) throw errorPrefijo;
         data = dataPrefijo;
       }
 
-      if (data) {
-        // ❌ NO guardamos sesión aquí, solo devolvemos los datos
-        return { exito: true, datos: data };
+      if (data.exito) {
+        return { exito: true, datos: data.datos };
       } else {
         return { exito: false, mensaje: `El número ${celularLimpio} no coincide con ningún registro activo.` };
       }
@@ -71,73 +67,60 @@ export const authService = {
   },
 
   // ==========================================
-  // LOGIN POR CELULAR Y CLAVE DE SEGURIDAD (Nuevo)
+  // LOGIN POR CELULAR (nuevo: valida la contraseña en el servidor)
   // ==========================================
-  async loginPorCelular(numeroCelular, claveSeguridad) {
+  async loginPorCelular(numeroCelular, password) {
     try {
-      const celularLimpio = String(numeroCelular).trim();
-      let { data: usuario, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('celular', celularLimpio)
-        .maybeSingle();
-
+      const { data, error } = await supabase.rpc('login_por_celular', {
+        p_celular: String(numeroCelular).trim(),
+        p_password: password,
+      });
       if (error) throw error;
 
-      // Buscar con prefijo si no se encontró en el primer intento
-      if (!usuario) {
-        const intentoConPrefijo = `52${celularLimpio}`;
-        const { data: dataPrefijo, error: errorPrefijo } = await supabase
-          .from('usuarios')
-          .select('*')
-          .eq('celular', intentoConPrefijo)
-          .maybeSingle();
-        
-        if (errorPrefijo) throw errorPrefijo;
-        usuario = dataPrefijo;
+      if (data.exito) {
+        localStorage.setItem('udat_app_session', JSON.stringify(data.datos));
+        return { exito: true, datos: data.datos };
       }
-
-      // Si el usuario no existe
-      if (!usuario) {
-        return { exito: false, mensaje: "Usuario no encontrado." };
-      }
-
-      // Validar la clave de seguridad (Nota: Cambia 'clave_seguridad' si tu columna tiene otro nombre, por ejemplo 'password')
-      if (String(usuario.clave_seguridad) !== String(claveSeguridad)) {
-        return { exito: false, mensaje: "La clave de seguridad es incorrecta." };
-      }
-
-      // Todo es correcto: Guardamos la sesión
-      localStorage.setItem('udat_app_session', JSON.stringify(usuario));
-      return { exito: true, datos: usuario };
-
+      return { exito: false, mensaje: data.mensaje };
     } catch (error) {
       console.error("Error en loginPorCelular:", error.message);
-      return { exito: false, mensaje: "Error al intentar iniciar sesión." };
+      return { exito: false, mensaje: "Error de conexión con la base de datos." };
     }
   },
 
   // ==========================================
-  // ACTIVAR CUENTA (sin guardar contraseña en texto plano)
+  // ACTIVAR CUENTA (ahora vía RPC: anon ya no tiene acceso directo a 'usuarios')
   // ==========================================
   async activarCuenta(id, payload) {
     try {
-      // ⚠️ Nota: Idealmente deberías usar supabase.auth.admin.createUser
-      // para crear un usuario en auth.users y luego vincularlo con la tabla 'usuarios'.
-      // Por ahora, actualizamos la tabla 'usuarios' (pero NO guardamos la contraseña en texto plano).
-      // En su lugar, podrías generar un hash en el backend y guardarlo.
-      // Como esto es un ejemplo, omitimos la contraseña.
-      const { data, error } = await supabase
-        .from('usuarios')
-        .update(payload)
-        .eq('id', id)
-        .select();
+      const { contrasena, generacion, nombre_completo, numero_empleado, empresa,
+        unidad_negocio, lider, gerente, tutor, fecha_registro } = payload;
 
+      const { data, error } = await supabase.rpc('completar_perfil', {
+        p_user_id: id,
+        p_generacion: generacion,
+        p_nombre_completo: nombre_completo,
+        p_numero_empleado: numero_empleado,
+        p_empresa: empresa,
+        p_unidad_negocio: unidad_negocio,
+        p_lider: lider,
+        p_gerente: gerente,
+        p_tutor: tutor,
+        p_fecha_registro: fecha_registro,
+      });
       if (error) throw error;
-      if (data && data.length > 0) {
-        localStorage.setItem('udat_app_session', JSON.stringify(data[0]));
+      if (!data.exito) throw new Error(data.mensaje);
+
+      if (contrasena) {
+        const { error: pwError } = await supabase.rpc('set_password', {
+          p_user_id: id,
+          p_new_password: contrasena,
+        });
+        if (pwError) throw pwError;
       }
-      return { exito: true, datos: data };
+
+      localStorage.setItem('udat_app_session', JSON.stringify(data.datos));
+      return { exito: true, datos: data.datos };
     } catch (error) {
       console.error("Error en activarCuenta:", error.message);
       return { exito: false, mensaje: "No se pudo registrar la información." };
